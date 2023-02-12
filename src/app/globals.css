@@ -1,7 +1,226 @@
+/* http://meyerweb.com/eric/tools/css/reset/ 
+   v2.0 | 20110126
+   License: none (public domain)
+*/
+
+html,
 body,
-html {
+div,
+span,
+applet,
+object,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+strong,
+sub,
+sup,
+tt,
+var,
+b,
+u,
+i,
+center,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+embed,
+figure,
+figcaption,
+footer,
+header,
+hgroup,
+menu,
+nav,
+output,
+ruby,
+section,
+summary,
+time,
+mark,
+audio,
+video {
   margin: 0;
   padding: 0;
+  border: 0;
+  font-size: 100%;
+  font: inherit;
+  vertical-align: baseline;
+}
+/* HTML5 display-role reset for older browsers */
+article,
+aside,
+details,
+figcaption,
+figure,
+footer,
+header,
+hgroup,
+menu,
+nav,
+section {
+  display: block;
+}
+body {
+  line-height: 1;
+}
+ol,
+ul {
+  list-style: none;
+}
+blockquote,
+q {
+  quotes: none;
+}
+blockquote:before,
+blockquote:after,
+q:before,
+q:after {
+  content: '';
+  content: none;
+}
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+i {
+  font-style: italic;
+}
+
+.pullquote {
+  padding-left: 2em;
+}
+
+.tooltip__wrapper {
+  position: relative;
+  display: inline-block;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: Roboto;
+}
+
+.tooltip__tooltip {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  position: absolute;
+  z-index: 99;
+  background: #222;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  display: block;
+  margin-top: -2px;
+}
+
+.tooltip__content {
+  position: relative;
+  background: #222;
+  color: #fff;
+  display: block;
+  font-size: 0.8em;
+  padding: 0.3em 1em;
+}
+
+.tooltip__content::after {
+  content: attr(data-text);
+}
+
+.tooltip__arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  left: 50%;
+  margin-left: -5px;
+  border-left: solid transparent 5px;
+  border-right: solid transparent 5px;
+  top: -5px;
+  border-bottom: solid #222 5px;
+}
+
+.tooltip__gap {
+  position: absolute;
+  width: 100%;
+  height: 20px;
+  bottom: -20px;
+}
+
+.toolbar {
+  position: relative;
+  border-bottom: 2px solid #eee;
+  margin-bottom: 1em;
+}
+
+.toolbarIcon {
+  cursor: pointer;
+  line-height: 26px;
+  fill: #444;
+  display: inline-block;
+  margin: 0 6px;
+  padding: 0.4em;
+  box-sizing: initial;
+  border-radius: 2px;
+  z-index: 0;
+  width: 16px;
+  height: 16px;
+}
+.tooltip__wrapper:first-child .toolbarIcon {
+  margin-left: 0;
+}
+
+.focusedToolbarIcon {
+  background-color: #f9f9f9;
+}
+
+.activeToolbarIcon {
+  fill: #000;
+  background-color: #ddd;
+  outline: 0;
 }
 
 /* https://github.com/sindresorhus/github-markdown-css */
@@ -13,8 +232,8 @@ html {
   padding: 1em 2.5em;
   color: #24292f;
   background-color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial,
-    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+  font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica,
+    Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
   font-size: 16px;
   line-height: 1.5;
   word-wrap: break-word;
@@ -82,7 +301,7 @@ html {
 
 .markdown-body b,
 .markdown-body strong {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .markdown-body dfn {
@@ -91,7 +310,7 @@ html {
 
 .markdown-body h1 {
   margin: 0.67em 0;
-  font-weight: 600;
+  font-weight: 700;
   padding-bottom: 0.3em;
   font-size: 2em;
   border-bottom: 1px solid hsla(210, 18%, 87%, 1);
@@ -272,34 +491,34 @@ html {
 .markdown-body h6 {
   margin-top: 24px;
   margin-bottom: 16px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.25;
 }
 
 .markdown-body h2 {
-  font-weight: 600;
+  font-weight: 700;
   padding-bottom: 0.3em;
   font-size: 1.5em;
   border-bottom: 1px solid hsla(210, 18%, 87%, 1);
 }
 
 .markdown-body h3 {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 1.25em;
 }
 
 .markdown-body h4 {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 1em;
 }
 
 .markdown-body h5 {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.875em;
 }
 
 .markdown-body h6 {
-  font-weight: 600;
+  font-weight: 700;
   font-size: 0.85em;
   color: #57606a;
 }
@@ -309,7 +528,7 @@ html {
   margin-bottom: 10px;
 }
 
-.markdown-body blockquote {
+.markdown-body blockquote:not(.pullquote) {
   margin: 0;
   padding: 0 1em;
   color: #57606a;
@@ -671,7 +890,7 @@ html {
   margin-top: 16px;
   font-size: 1em;
   font-style: italic;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .markdown-body dl dd {
@@ -680,7 +899,7 @@ html {
 }
 
 .markdown-body table th {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .markdown-body table th,
@@ -900,7 +1119,7 @@ html {
 }
 
 .markdown-body .csv-data th {
-  font-weight: 600;
+  font-weight: 700;
   background: #f6f8fa;
   border-top: 0;
 }
