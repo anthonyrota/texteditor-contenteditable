@@ -338,10 +338,6 @@ function makeEditorValue(blocks: BlockNode[], id: string): EditorValue {
   };
 }
 
-function makeKey(type: string, id: string): string {
-  return `${type}@${id}`;
-}
-
 function ReactTableNode({ value }: { value: TableNode }): JSX.Element {
   const selectedEditors = useContext(SelectedEditorsContext);
   const hasSelectedCell = value.rows.some((row) =>
@@ -395,7 +391,21 @@ function ReactBlockImageNode({ value }: { value: ImageNode }): JSX.Element {
   );
 }
 
-function ReactParagraphNode({ value }: { value: ParagraphNode }): JSX.Element {
+function ReactParagraphNode(
+  props:
+    | {
+        value: ParagraphNode & {
+          style: Exclude<ParagraphStyle, NumberedListParagraphStyle>;
+        };
+      }
+    | {
+        value: ParagraphNode & {
+          style: NumberedListParagraphStyle;
+        };
+        listIndex: number;
+      },
+): JSX.Element {
+  const { value } = props;
   const isEmpty =
     value.children.length === 1 &&
     !value.children[0].isBlock &&
@@ -547,22 +557,114 @@ function ReactTextNode({ value }: { value: TextNode }): JSX.Element {
   );
 }
 
+function groupArr<T, G>(
+  items: T[],
+  getGroup: (item: T) => G,
+  cmpGroups: (a: G, b: G) => boolean,
+): { groupInfo: G; items: T[] }[] {
+  let groups: { groupInfo: G; items: T[] }[] = [];
+  let lastGroup: G;
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    const group = getGroup(item);
+    if (i === 0 || !cmpGroups(lastGroup!, group)) {
+      groups.push({ groupInfo: group, items: [item] });
+    } else {
+      groups[groups.length - 1].items.push(item);
+    }
+    lastGroup = group;
+  }
+  return groups;
+}
+
 function ReactEditorValue_({ value }: { value: EditorValue }): JSX.Element {
+  const listBlockIdToIdx = useContext(NumberedListIndicesContext);
+  let children: JSX.Element[] = [];
+  groupArr(
+    value.blocks,
+    (block) => {
+      if (
+        block.type === BlockNodeType.Paragraph &&
+        (block.style.type === ParagraphStyleType.BulletList ||
+          block.style.type === ParagraphStyleType.NumberedList)
+      ) {
+        return { listType: block.style.type, listId: block.style.listId };
+      }
+      return null;
+    },
+    (a, b) => a === b || (a !== null && b !== null && a.listId === b.listId),
+  ).forEach((group) => {
+    const { groupInfo } = group;
+    if (groupInfo !== null) {
+      const { listId, listType } = groupInfo;
+      const items = group.items as (ParagraphNode & {
+        style: BulletListParagraphStyle | NumberedListParagraphStyle;
+      })[];
+      const listNodes = items.map((block) => {
+        if (block.style.type === ParagraphStyleType.NumberedList) {
+          return (
+            <ReactParagraphNode
+              value={
+                block as ParagraphNode & {
+                  style: NumberedListParagraphStyle;
+                }
+              }
+              listIndex={listBlockIdToIdx[block.id]}
+              key={block.id}
+            />
+          );
+        }
+        return (
+          <ReactParagraphNode
+            value={
+              block as ParagraphNode & {
+                style: BulletListParagraphStyle;
+              }
+            }
+            key={block.id}
+          />
+        );
+      });
+      if (listType === ParagraphStyleType.NumberedList) {
+        children.push(
+          <ol key={items[0].id} start={listBlockIdToIdx[items[0].id] + 1}>
+            {listNodes}
+          </ol>,
+        );
+      } else {
+        children.push(<ul key={items[0].id}>{listNodes}</ul>);
+      }
+      return;
+    }
+    group.items.forEach((block) => {
+      switch (block.type) {
+        case BlockNodeType.Image: {
+          children.push(<ReactBlockImageNode value={block} key={block.id} />);
+          break;
+        }
+        case BlockNodeType.Table: {
+          children.push(<ReactTableNode value={block} key={block.id} />);
+          break;
+        }
+        case BlockNodeType.Paragraph: {
+          children.push(
+            <ReactParagraphNode
+              value={
+                block as ParagraphNode & {
+                  style: Exclude<ParagraphStyle, NumberedListParagraphStyle>;
+                }
+              }
+              key={block.id}
+            />,
+          );
+          break;
+        }
+      }
+    });
+  });
   return (
     <div data-family={EditorFamilyType.Editor} data-id={value.id}>
-      {value.blocks.map((block) => {
-        switch (block.type) {
-          case BlockNodeType.Image: {
-            return <ReactBlockImageNode value={block} key={block.id} />;
-          }
-          case BlockNodeType.Table: {
-            return <ReactTableNode value={block} key={block.id} />;
-          }
-          case BlockNodeType.Paragraph: {
-            return <ReactParagraphNode value={block} key={block.id} />;
-          }
-        }
-      })}
+      {children}
     </div>
   );
 }
@@ -768,12 +870,14 @@ function walkEditorValues<T>(
   ) => { data: T; newValue?: EditorValue; stop: boolean },
   initialData: T,
   willMap: boolean,
+  onBlock?: (block: BlockNode) => void,
 ): { didStop: boolean; retValue: T; mappedEditor: EditorValue } {
   let didStop = false;
   let retValue: T = initialData;
   function walk(value: EditorValue, data: T): void {
     for (let bI = 0; bI < value.blocks.length && !didStop; bI++) {
       const block = value.blocks[bI];
+      onBlock?.(block);
       if (block.type === BlockNodeType.Table) {
         for (let i = 0; i < block.rows.length && !didStop; i++) {
           let row = block.rows[i];
@@ -2058,7 +2162,13 @@ function insertSelection(
           } else {
             if (point.offset === 0) {
               newBlocks.push(
-                makeParagraph(firstBlock.children, block.style, block.id),
+                makeParagraph(
+                  firstBlock.children,
+                  getParagraphLength(block) === 0
+                    ? firstBlock.style
+                    : block.style,
+                  block.id,
+                ),
               );
             } else {
               newBlocks.push(
@@ -2688,6 +2798,8 @@ type EditorDataTransfer = PlainDataTransfer | RichDataTransfer;
 
 const SelectedEditorsContext = createContext<string[]>([]);
 
+const NumberedListIndicesContext = createContext<Record<string, number>>({});
+
 const isBrowser =
   typeof window === 'object' &&
   typeof document === 'object' &&
@@ -2755,6 +2867,7 @@ const J = 74;
 const X = 88;
 const Z = 90;
 const Y = 89;
+const H = 72;
 const ONE = 49;
 const TWO = 50;
 const SEVEN = 55;
@@ -2764,7 +2877,16 @@ const FULLSTOP = 190;
 const COMMA = 188;
 const QUOTE = 222;
 const BACKSLASH = 220;
+const BACKSPACE = 8;
 
+const isDeleteBackward = anyPass([
+  allPass([
+    (event: CompatibleKeyboardEvent) =>
+      !isApple || !event.ctrlKey || event.altKey,
+    hasKeyCode(BACKSPACE),
+  ]),
+  allPass([hasControlKey, not(hasShiftKey), hasKeyCode(H)]),
+]);
 const isUndo = anyPass([
   allPass([hasCommandModifier, not(hasShiftKey), hasKeyCode(Z)]),
   allPass([hasCommandModifier, hasShiftKey, hasKeyCode(Y)]),
@@ -2830,11 +2952,6 @@ const isNumberedList = allPass([
 const isClearFormatting = allPass([
   hasCommandModifier,
   not(hasShiftKey),
-  hasKeyCode(BACKSLASH),
-]);
-const isClearFormattingHard = allPass([
-  hasCommandModifier,
-  hasShiftKey,
   hasKeyCode(BACKSLASH),
 ]);
 
@@ -2990,6 +3107,39 @@ function toggleInlineStyle(
     value: edit.value,
     textStyle: getSelectionTextStyle(editorCtrl.value, selection),
   };
+}
+
+function getEndParagraphStyle(
+  value: EditorValue,
+  selection: Selection,
+): ParagraphStyle {
+  if (selection.type === SelectionType.Table) {
+    return { type: ParagraphStyleType.Default };
+  }
+  const point = selection.end;
+  if (point.type !== BlockSelectionPointType.Paragraph) {
+    return { type: ParagraphStyleType.Default };
+  }
+  return walkEditorValues<ParagraphStyle | undefined>(
+    value,
+    (subValue, _data, _ids) => {
+      if (subValue.id !== selection.editorId) {
+        return {
+          stop: false,
+          data: undefined,
+        };
+      }
+      const para = subValue.blocks.find(
+        (block) => block.id === point.blockId,
+      ) as ParagraphNode;
+      return {
+        stop: true,
+        data: para.style,
+      };
+    },
+    undefined,
+    false,
+  ).retValue!;
 }
 
 function isParagraphStyleActive(
@@ -3307,6 +3457,7 @@ enum CommandType {
   ClearFormat,
   Undo,
   Redo,
+  DeleteBackwardKey,
 }
 type Command =
   | {
@@ -3330,7 +3481,8 @@ type Command =
   | {
       type: CommandType.ClearFormat | CommandType.Redo | CommandType.Undo;
       selection: Selection;
-    };
+    }
+  | { type: CommandType.DeleteBackwardKey; selection: Selection };
 const cmds: {
   isKey: (event: KeyboardEvent) => boolean;
   icon?: {
@@ -3670,6 +3822,15 @@ const cmds: {
       },
     ],
   },
+  {
+    isKey: isDeleteBackward,
+    getCmds: (selection) => [
+      {
+        type: CommandType.DeleteBackwardKey,
+        selection,
+      },
+    ],
+  },
 ];
 
 function ReactEditor({
@@ -3779,6 +3940,7 @@ function ReactEditor({
     let newEditorCtrl = editorCtrl.current;
     console.log(queue);
     let dropValue: EditorValue | null = null;
+    let ignoreDelete: boolean = false;
     let ignoreSelectionN = 0;
     for (let i = 0; i < queue.length; i++) {
       const command = queue[i];
@@ -3801,6 +3963,10 @@ function ReactEditor({
           case 'deleteHardLineBackward':
           case 'deleteSoftLineForward':
           case 'deleteHardLineForward': {
+            if (ignoreDelete) {
+              ignoreDelete = false;
+              continue;
+            }
             let action: PushStateAction;
             if (inputType === 'deleteByCut' || inputType === 'deleteByDrag') {
               action = PushStateAction.Unique;
@@ -3863,13 +4029,20 @@ function ReactEditor({
             } else if (data.type === DataTransferType.Rich) {
               insertValue = data.value;
             } else {
+              const style = getEndParagraphStyle(
+                newEditorCtrl.value,
+                inputSelection,
+              );
               insertValue = makeEditorValue(
-                [
-                  makeDefaultParagraph(
-                    [makeText(data.text, newEditorCtrl.textStyle, makeId())],
-                    makeId(),
+                data.text
+                  .split(/\r?\n/)
+                  .map((paraText) =>
+                    makeParagraph(
+                      [makeText(paraText, newEditorCtrl.textStyle, makeId())],
+                      style,
+                      makeId(),
+                    ),
                   ),
-                ],
                 makeId(),
               );
             }
@@ -3893,14 +4066,20 @@ function ReactEditor({
           }
           case 'insertParagraph': {
             let action = PushStateAction.Insert;
+            const style = getEndParagraphStyle(
+              newEditorCtrl.value,
+              inputSelection,
+            );
             const insertValue = makeEditorValue(
               [
-                makeDefaultParagraph(
+                makeParagraph(
                   [makeText('', newEditorCtrl.textStyle, makeId())],
+                  style,
                   makeId(),
                 ),
-                makeDefaultParagraph(
+                makeParagraph(
                   [makeText('', newEditorCtrl.textStyle, makeId())],
+                  style,
                   makeId(),
                 ),
               ],
@@ -4012,6 +4191,79 @@ function ReactEditor({
           lastAction: PushStateAction.Unique,
           makeId,
         };
+      } else if (command.type === CommandType.DeleteBackwardKey) {
+        if (!isCollapsed(inputSelection)) {
+          continue;
+        }
+        const point = (inputSelection as BlockSelection).start;
+        if (
+          point.type !== BlockSelectionPointType.Paragraph ||
+          point.offset !== 0
+        ) {
+          continue;
+        }
+        const res = walkEditorValues<boolean | undefined>(
+          editorCtrl.current.value,
+          (subValue, _data, _ids) => {
+            if (subValue.id !== inputSelection.editorId) {
+              return {
+                stop: false,
+                data: undefined,
+              };
+            }
+            const para = subValue.blocks.find(
+              (block) => block.id === point.blockId,
+            ) as ParagraphNode;
+            const { style } = para;
+            if (
+              style.type === ParagraphStyleType.BulletList ||
+              style.type === ParagraphStyleType.NumberedList ||
+              style.type === ParagraphStyleType.PullQuote ||
+              style.type === ParagraphStyleType.Quote
+            ) {
+              return {
+                stop: true,
+                data: true,
+                newValue: makeEditorValue(
+                  subValue.blocks.map((block) => {
+                    if (block.id === point.blockId) {
+                      return makeDefaultParagraph(para.children, para.id);
+                    }
+                    return block;
+                  }),
+                  subValue.id,
+                ),
+              };
+            }
+            return {
+              stop: true,
+              data: undefined,
+            };
+          },
+          undefined,
+          true,
+        );
+        if (res.retValue) {
+          newEditorCtrl = pushState(
+            newEditorCtrl,
+            res.mappedEditor,
+            inputSelection,
+            newEditorCtrl.textStyle,
+            PushStateAction.Unique,
+          );
+          if (i < queue.length - 1) {
+            const next = queue[i + 1];
+            if (
+              next.type === CommandType.Input &&
+              (next.inputType === 'deleteContentBackward' ||
+                next.inputType === 'deleteWordBackward' ||
+                next.inputType === 'deleteSoftLineBackward' ||
+                next.inputType === 'deleteHardLineBackward')
+            ) {
+              ignoreDelete = true;
+            }
+          }
+        }
       }
     }
     editorCtrl.current = newEditorCtrl;
@@ -4221,7 +4473,11 @@ function ReactEditor({
               renderToStaticMarkup(
                 <>
                   <span data-matita={JSON.stringify(curValue)} />
-                  <ReactEditorValue value={curValue} />
+                  <NumberedListIndicesContext.Provider
+                    value={getListBlockIdToIdx(value)}
+                  >
+                    <ReactEditorValue value={curValue} />
+                  </NumberedListIndicesContext.Provider>
                 </>,
               ),
             ],
@@ -4282,14 +4538,14 @@ function ReactEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const selectedEditors = ((): string[] => {
-    const { selection } = editorCtrl.current;
+  function getSelectedEditors(editorCtrl: EditorController): string[] {
+    const { selection } = editorCtrl;
     if (!selection) {
       return [];
     }
     const selected: string[] = [];
     walkEditorValues(
-      editorCtrl.current.value,
+      editorCtrl.value,
       (subValue, isSelected, ids) => {
         if (isSelected) {
           selected.push(subValue.id);
@@ -4362,7 +4618,41 @@ function ReactEditor({
       false,
     );
     return selected;
-  })();
+  }
+
+  function getListBlockIdToIdx(value: EditorValue): Record<string, number> {
+    let listIdToCount: Record<string, number> = {};
+    let listBlockIdToIdx: Record<string, number> = {};
+    walkEditorValues(
+      value,
+      (_subValue, _data, _ids) => {
+        return {
+          stop: false,
+          data: undefined,
+        };
+      },
+      undefined,
+      false,
+      (block) => {
+        if (
+          !block.isBlock &&
+          block.style.type === ParagraphStyleType.NumberedList
+        ) {
+          const { listId } = block.style;
+          const blockId = block.id;
+          let listIdx: number;
+          if (listId in listIdToCount) {
+            listIdx = listIdToCount[listId]++;
+          } else {
+            listIdx = 0;
+            listIdToCount[listId] = 1;
+          }
+          listBlockIdToIdx[blockId] = listIdx;
+        }
+      },
+    );
+    return listBlockIdToIdx;
+  }
 
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
@@ -4413,8 +4703,14 @@ function ReactEditor({
         suppressContentEditableWarning
         ref={editorRef}
       >
-        <SelectedEditorsContext.Provider value={selectedEditors}>
-          <ReactEditorValue value={editorCtrl.current.value} />
+        <SelectedEditorsContext.Provider
+          value={getSelectedEditors(editorCtrl.current)}
+        >
+          <NumberedListIndicesContext.Provider
+            value={getListBlockIdToIdx(editorCtrl.current.value)}
+          >
+            <ReactEditorValue value={editorCtrl.current.value} />
+          </NumberedListIndicesContext.Provider>
         </SelectedEditorsContext.Provider>
       </div>
     </>
@@ -4673,7 +4969,7 @@ export default function Home() {
   }
 
   // prettier-ignore
-  const initialValue = makeEditorValue([makeTitleParagraph([makeDefaultText("This is the title",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id()),],id()),id()),],id()),],2,id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id())],id()),id()),],id()),],2,id()),makeBulletListParagraph([makeDefaultText("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",id()),],id(),id()),makeDefaultParagraph([makeDefaultText("",id())],id()),makeDefaultParagraph([makeDefaultText("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",id()),],id())],id())
+  const initialValue = makeEditorValue([makeTitleParagraph([makeDefaultText("This is the title",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id()),],id()),id()),],id()),],2,id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id())],id()),id()),],id()),],2,id()),makeNumberedListParagraph([makeDefaultText("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",id()),],id(),id()),makeDefaultParagraph([makeDefaultText("",id())],id()),makeDefaultParagraph([makeDefaultText("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",id()),],id())],id())
 
   return (
     <main className={['markdown-body', roboto.className].join(' ')}>
