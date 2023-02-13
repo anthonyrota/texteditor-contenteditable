@@ -13,6 +13,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import Image from 'next/image';
 import { Roboto } from '@next/font/google';
 import { Tooltip } from '@/Tooltip';
+import { createDraft, finishDraft } from 'immer';
+import { WritableDraft } from 'immer/dist/internal';
 
 const roboto = Roboto({
   weight: ['400', '700'],
@@ -338,11 +340,13 @@ function makeEditorValue(blocks: BlockNode[], id: string): EditorValue {
   };
 }
 
-function ReactTableNode({ value }: { value: TableNode }): JSX.Element {
-  const selectedEditors = useContext(SelectedEditorsContext);
-  const hasSelectedCell = value.rows.some((row) =>
-    row.cells.some((cell) => selectedEditors.includes(cell.value.id)),
-  );
+interface ReactTableNodeProps {
+  value: TableNode;
+}
+function ReactTableNode_({
+  value,
+  selectedCells,
+}: ReactTableNodeProps & { selectedCells: string[] }): JSX.Element {
   return (
     <div>
       <table
@@ -359,9 +363,9 @@ function ReactTableNode({ value }: { value: TableNode }): JSX.Element {
                     <td
                       key={cell.id}
                       className={
-                        selectedEditors.includes(cell.value.id)
+                        selectedCells.includes(cell.value.id)
                           ? 'selected'
-                          : hasSelectedCell
+                          : selectedCells.length > 0
                           ? 'not-selected'
                           : undefined
                       }
@@ -378,8 +382,27 @@ function ReactTableNode({ value }: { value: TableNode }): JSX.Element {
     </div>
   );
 }
+const ReactTableNode_m = memo(ReactTableNode_, (a, b) => {
+  return (
+    a.value === b.value &&
+    a.selectedCells.length === b.selectedCells.length &&
+    a.selectedCells.every((id, i) => b.selectedCells[i] === id)
+  );
+});
+function ReactTableNode({ value }: ReactTableNodeProps): JSX.Element {
+  const selectedEditors = useContext(SelectedEditorsContext);
+  const selectedCells: string[] = [];
+  value.rows.forEach((row) => {
+    row.cells.forEach((cell) => {
+      if (selectedEditors.includes(cell.value.id)) {
+        selectedCells.push(cell.value.id);
+      }
+    });
+  });
+  return <ReactTableNode_m value={value} selectedCells={selectedCells} />;
+}
 
-function ReactBlockImageNode({ value }: { value: ImageNode }): JSX.Element {
+function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
   return (
     <Image
       data-family={EditorFamilyType.Block}
@@ -390,8 +413,9 @@ function ReactBlockImageNode({ value }: { value: ImageNode }): JSX.Element {
     />
   );
 }
+const ReactBlockImageNode = memo(ReactBlockImageNode_);
 
-function ReactParagraphNode(
+function ReactParagraphNode_(
   props:
     | {
         value: ParagraphNode & {
@@ -515,6 +539,7 @@ function ReactParagraphNode(
     }
   }
 }
+const ReactParagraphNode = memo(ReactParagraphNode_);
 
 function ReactTextNode({ value }: { value: TextNode }): JSX.Element {
   let text: JSX.Element | string = value.text;
@@ -874,7 +899,10 @@ function walkEditorValues<T>(
 ): { didStop: boolean; retValue: T; mappedEditor: EditorValue } {
   let didStop = false;
   let retValue: T = initialData;
-  function walk(value: EditorValue, data: T): void {
+  function walk(
+    value: WritableDraft<EditorValue> | EditorValue,
+    data: T,
+  ): void {
     for (let bI = 0; bI < value.blocks.length && !didStop; bI++) {
       const block = value.blocks[bI];
       onBlock?.(block);
@@ -909,10 +937,7 @@ function walkEditorValues<T>(
     }
   }
   let { data, newValue, stop } = onEditorValue(editor, initialData, null);
-  let value = editor;
-  if (willMap) {
-    value = JSON.parse(JSON.stringify(editor)) as EditorValue;
-  }
+  let value: WritableDraft<EditorValue> | EditorValue = editor;
   if (newValue) {
     if (!willMap) {
       throw new Error();
@@ -920,14 +945,20 @@ function walkEditorValues<T>(
     if (stop) {
       return { didStop: false, retValue: data, mappedEditor: newValue };
     } else {
-      value = newValue;
+      value = createDraft(newValue);
     }
+  } else if (willMap) {
+    value = createDraft(editor);
   }
   if (stop) {
     return { didStop: true, retValue: data, mappedEditor: editor };
   }
   walk(value, data);
-  return { didStop, retValue, mappedEditor: value };
+  return {
+    didStop,
+    retValue,
+    mappedEditor: willMap ? finishDraft(value) : value,
+  };
 }
 
 function findParentEditors(
@@ -3833,6 +3864,9 @@ const cmds: {
   },
 ];
 
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
 function ReactEditor({
   initialValue,
   makeId,
@@ -3850,17 +3884,13 @@ function ReactEditor({
     lastAction: PushStateAction.Selection,
     makeId,
   });
-  const isUpdatingSelection = useRef<boolean>(false);
+  const isUpdatingSelection = useRef<number>(0);
   const inputQueueRef = useRef<Command[]>([]);
-  const inputQueueRequestRef = useRef<NodeJS.Timeout | number | null>(null);
+  const inputQueueRequestRef = useRef<number | null>(null);
   let newDomSelectionRef = useRef<Selection | null>(null);
   const [_renderToggle, setRenderToggle] = useState(false);
 
   const updateSelection = (newSelection: Selection): void => {
-    if (isUpdatingSelection.current) {
-      return;
-    }
-
     editorRef.current!.focus();
 
     const native = window.getSelection()!;
@@ -3874,7 +3904,7 @@ function ReactEditor({
       editorRef.current!,
     );
 
-    isUpdatingSelection.current = true;
+    isUpdatingSelection.current++;
     native.removeAllRanges();
     if (
       getDirection(editorCtrl.current.value, newSelection) ===
@@ -3896,7 +3926,7 @@ function ReactEditor({
     }
 
     setTimeout(() => {
-      isUpdatingSelection.current = false;
+      isUpdatingSelection.current--;
     });
   };
 
@@ -4013,7 +4043,11 @@ function ReactEditor({
               inputType === 'insertReplacementText' ||
               inputType === 'insertFromYank' ||
               inputType === 'insertFromPaste' ||
-              inputType === 'insertFromDrop'
+              inputType === 'insertFromDrop' ||
+              inputType === 'insertLineBreak' ||
+              (inputType === 'insertText' &&
+                data?.type === DataTransferType.Plain &&
+                data.text.includes('\n'))
             ) {
               action = PushStateAction.Unique;
             } else {
@@ -4065,7 +4099,7 @@ function ReactEditor({
             break;
           }
           case 'insertParagraph': {
-            let action = PushStateAction.Insert;
+            let action = PushStateAction.Unique;
             const style = getEndParagraphStyle(
               newEditorCtrl.value,
               inputSelection,
@@ -4273,13 +4307,9 @@ function ReactEditor({
     setRenderToggle((t) => !t);
   };
 
-  useLayoutEffect(() => {
-    if (newDomSelectionRef.current !== null) {
-      updateSelection(newDomSelectionRef.current);
-    }
-  });
   useEffect(() => {
     if (newDomSelectionRef.current !== null) {
+      updateSelection(newDomSelectionRef.current);
       newDomSelectionRef.current = null;
       const selection = window.getSelection();
       if (!selection) {
@@ -4384,6 +4414,9 @@ function ReactEditor({
             }
           }
         }
+        if (!data) {
+          console.log(parsedDocument);
+        }
       }
       if (!data) {
         const plain = event.dataTransfer.getData('text/plain');
@@ -4411,7 +4444,32 @@ function ReactEditor({
 
   function queueCommand(command: Command): void {
     if (inputQueueRef.current.length === 0) {
-      inputQueueRequestRef.current = setTimeout(flushInputQueue);
+      if (
+        !(command.type === CommandType.DeleteBackwardKey) &&
+        !(
+          command.type === CommandType.Input &&
+          command.inputType === 'deleteByDrag'
+        )
+      ) {
+        inputQueueRef.current.push(command);
+        flushInputQueue();
+        return;
+      }
+      inputQueueRequestRef.current = requestAnimationFrame(flushInputQueue);
+    } else {
+      const lastCommand =
+        inputQueueRef.current[inputQueueRef.current.length - 1];
+      if (
+        lastCommand.type === CommandType.DeleteBackwardKey ||
+        (lastCommand.type === CommandType.Input &&
+          lastCommand.inputType === 'deleteByDrag')
+      ) {
+        cancelAnimationFrame(inputQueueRequestRef.current!);
+        inputQueueRef.current.push(command);
+        console.log('flushing!');
+        flushInputQueue();
+        return;
+      }
     }
     inputQueueRef.current.push(command);
   }
@@ -4425,7 +4483,7 @@ function ReactEditor({
   }, []);
 
   const onHTMLSelectionChange = (event: Event): void => {
-    if (isUpdatingSelection.current) {
+    if (isUpdatingSelection.current > 0) {
       return;
     }
 
@@ -4657,7 +4715,7 @@ function ReactEditor({
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
-  }, [isClient]);
+  }, []);
 
   const onEditorToolbarMouseDown = (e: React.MouseEvent<HTMLElement>) => {
     e.preventDefault();

@@ -10,7 +10,7 @@ export interface TooltipProps {
   holdDuration?: number;
 }
 
-export interface TooltipState {
+interface TooltipState {
   visible: boolean;
   focused: boolean;
 }
