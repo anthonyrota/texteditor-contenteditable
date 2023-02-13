@@ -566,6 +566,7 @@ function ReactTextNode({ value }: { value: TextNode }): JSX.Element {
   }
   if (typeof text !== 'string') {
     return cloneElement(text, {
+      className: 'inline-text',
       'data-family': EditorFamilyType.Inline,
       'data-type': InlineNodeType.Text,
       'data-id': value.id,
@@ -573,6 +574,7 @@ function ReactTextNode({ value }: { value: TextNode }): JSX.Element {
   }
   return (
     <span
+      className="inline-text"
       data-family={EditorFamilyType.Inline}
       data-type={InlineNodeType.Text}
       data-id={value.id}
@@ -4032,7 +4034,6 @@ function ReactEditor({
             mapSelectionFns.push(edit.mapSelection);
             break;
           }
-          case 'insertLineBreak':
           case 'insertFromYank':
           case 'insertReplacementText':
           case 'insertText':
@@ -4044,7 +4045,6 @@ function ReactEditor({
               inputType === 'insertFromYank' ||
               inputType === 'insertFromPaste' ||
               inputType === 'insertFromDrop' ||
-              inputType === 'insertLineBreak' ||
               (inputType === 'insertText' &&
                 data?.type === DataTransferType.Plain &&
                 data.text.includes('\n'))
@@ -4098,25 +4098,34 @@ function ReactEditor({
             mapSelectionFns.push(edit.mapSelection);
             break;
           }
-          case 'insertParagraph': {
+          case 'insertParagraph':
+          case 'insertLineBreak': {
             let action = PushStateAction.Unique;
             const style = getEndParagraphStyle(
               newEditorCtrl.value,
               inputSelection,
             );
             const insertValue = makeEditorValue(
-              [
-                makeParagraph(
-                  [makeText('', newEditorCtrl.textStyle, makeId())],
-                  style,
-                  makeId(),
-                ),
-                makeParagraph(
-                  [makeText('', newEditorCtrl.textStyle, makeId())],
-                  style,
-                  makeId(),
-                ),
-              ],
+              inputType === 'insertParagraph'
+                ? [
+                    makeParagraph(
+                      [makeText('', newEditorCtrl.textStyle, makeId())],
+                      style,
+                      makeId(),
+                    ),
+                    makeParagraph(
+                      [makeText('', newEditorCtrl.textStyle, makeId())],
+                      style,
+                      makeId(),
+                    ),
+                  ]
+                : [
+                    makeParagraph(
+                      [makeText('\n', newEditorCtrl.textStyle, makeId())],
+                      style,
+                      makeId(),
+                    ),
+                  ],
               makeId(),
             );
             const edit = insertSelection(
