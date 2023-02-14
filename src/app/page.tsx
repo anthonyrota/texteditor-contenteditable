@@ -16,6 +16,7 @@ import { Roboto } from '@next/font/google';
 import { Tooltip } from '@/Tooltip';
 import { createDraft, finishDraft } from 'immer';
 import { WritableDraft } from 'immer/dist/internal';
+import { flushSync } from 'react-dom';
 
 const roboto = Roboto({
   weight: ['400', '700'],
@@ -3518,37 +3519,36 @@ type Command =
       inputType: string;
       selection: Selection;
       data?: EditorDataTransfer;
+      origin?: string;
     }
   | {
       type: CommandType.InlineFormat;
       selection: Selection;
       condition: (style: TextStyle) => boolean;
       transform: (style: TextStyle, active: boolean) => TextStyle;
+      origin?: string;
     }
   | {
       type: CommandType.BlockFormat;
       selection: Selection;
       condition: (style: ParagraphStyle) => boolean;
       transform: (style: ParagraphStyle, active: boolean) => ParagraphStyle;
+      origin?: string;
     }
   | {
       type: CommandType.ClearFormat | CommandType.Redo | CommandType.Undo;
       selection: Selection;
+      origin?: string;
     }
-  | { type: CommandType.DeleteBackwardKey; selection: Selection };
-const cmds: {
-  isKey: (event: KeyboardEvent) => boolean;
-  icon?: {
-    name: string;
-    isActive: (editorCtrl: EditorController) => boolean;
-    Icon: typeof ToolbarIcon;
-  };
-  getCmds: (selection: Selection, makeId: () => string) => Command[];
-}[] = [
-  {
+  | {
+      type: CommandType.DeleteBackwardKey;
+      selection: Selection;
+      origin?: string;
+    };
+const cmds = {
+  bold: {
     isKey: isBold,
     icon: {
-      name: 'bold',
       isActive: (c) => !!c.textStyle.bold,
       Icon: BoldIcon,
     },
@@ -3556,6 +3556,7 @@ const cmds: {
       {
         type: CommandType.InlineFormat,
         selection,
+        origin: 'bold shortcut',
         condition: (style) => !!style.bold,
         transform: (style, active) => ({
           ...style,
@@ -3564,10 +3565,9 @@ const cmds: {
       },
     ],
   },
-  {
+  italic: {
     isKey: isItalic,
     icon: {
-      name: 'italic',
       isActive: (c) => !!c.textStyle.italic,
       Icon: ItalicIcon,
     },
@@ -3575,6 +3575,7 @@ const cmds: {
       {
         type: CommandType.InlineFormat,
         selection,
+        origin: 'italic shortcut',
         condition: (style) => !!style.italic,
         transform: (style, active) => ({
           ...style,
@@ -3583,10 +3584,9 @@ const cmds: {
       },
     ],
   },
-  {
+  underline: {
     isKey: isUnderline,
     icon: {
-      name: 'underline',
       isActive: (c) => !!c.textStyle.underline,
       Icon: UnderlineIcon,
     },
@@ -3594,6 +3594,7 @@ const cmds: {
       {
         type: CommandType.InlineFormat,
         selection,
+        origin: 'underline shortcut',
         condition: (style) => !!style.underline,
         transform: (style, active) => ({
           ...style,
@@ -3602,10 +3603,9 @@ const cmds: {
       },
     ],
   },
-  {
+  'inline code': {
     isKey: isInlineCode,
     icon: {
-      name: 'inline code',
       isActive: (c) => !!c.textStyle.code,
       Icon: InlineCodeIcon,
     },
@@ -3621,10 +3621,9 @@ const cmds: {
       },
     ],
   },
-  {
+  strikethrough: {
     isKey: isStrikethrough,
     icon: {
-      name: 'strikethrough',
       isActive: (c) => !!c.textStyle.strikethrough,
 
       Icon: StrikethroughIcon,
@@ -3633,6 +3632,7 @@ const cmds: {
       {
         type: CommandType.InlineFormat,
         selection,
+        origin: 'strikethrough shortcut',
         condition: (style) => !!style.strikethrough,
         transform: (style, active) => ({
           ...style,
@@ -3641,10 +3641,9 @@ const cmds: {
       },
     ],
   },
-  {
+  superscript: {
     isKey: isSuperscript,
     icon: {
-      name: 'superscript',
       isActive: (c) => c.textStyle.script === TextScript.Superscript,
       Icon: SuperscriptIcon,
     },
@@ -3652,6 +3651,7 @@ const cmds: {
       {
         type: CommandType.InlineFormat,
         selection,
+        origin: 'superscript shortcut',
         condition: (style) => style.script === TextScript.Superscript,
         transform: (style, active) => ({
           ...style,
@@ -3660,10 +3660,9 @@ const cmds: {
       },
     ],
   },
-  {
+  subscript: {
     isKey: isSubscript,
     icon: {
-      name: 'subscript',
       isActive: (c) => c.textStyle.script === TextScript.Subscript,
       Icon: SubscriptIcon,
     },
@@ -3671,6 +3670,7 @@ const cmds: {
       {
         type: CommandType.InlineFormat,
         selection,
+        origin: 'subscript shortcut',
         condition: (style) => style.script === TextScript.Subscript,
         transform: (style, active) => ({
           ...style,
@@ -3679,10 +3679,9 @@ const cmds: {
       },
     ],
   },
-  {
+  title: {
     isKey: isTitle,
     icon: {
-      name: 'title',
       isActive: (c) =>
         isParagraphStyleActive(
           c.value,
@@ -3702,10 +3701,9 @@ const cmds: {
       },
     ],
   },
-  {
+  subtitle: {
     isKey: isSubtitle,
     icon: {
-      name: 'subtitle',
       isActive: (c) =>
         isParagraphStyleActive(
           c.value,
@@ -3727,10 +3725,9 @@ const cmds: {
       },
     ],
   },
-  {
+  quote: {
     isKey: isQuote,
     icon: {
-      name: 'quote',
       isActive: (c) =>
         isParagraphStyleActive(
           c.value,
@@ -3750,10 +3747,9 @@ const cmds: {
       },
     ],
   },
-  {
+  'pull quote': {
     isKey: isPullQuote,
     icon: {
-      name: 'pull quote',
       isActive: (c) =>
         isParagraphStyleActive(
           c.value,
@@ -3775,10 +3771,9 @@ const cmds: {
       },
     ],
   },
-  {
+  'bullet list': {
     isKey: isBulletList,
     icon: {
-      name: 'bullet list',
       isActive: (c) =>
         isParagraphStyleActive(
           c.value,
@@ -3811,10 +3806,9 @@ const cmds: {
       ];
     },
   },
-  {
+  'numbered list': {
     isKey: isNumberedList,
     icon: {
-      name: 'numbered list',
       isActive: (c) =>
         isParagraphStyleActive(
           c.value,
@@ -3847,9 +3841,8 @@ const cmds: {
       ];
     },
   },
-  {
+  'clear format': {
     isKey: isClearFormatting,
-    icon: undefined,
     getCmds: (selection) => [
       {
         type: CommandType.ClearFormat,
@@ -3857,7 +3850,7 @@ const cmds: {
       },
     ],
   },
-  {
+  undo: {
     isKey: isUndo,
     getCmds: (selection) => [
       {
@@ -3866,7 +3859,7 @@ const cmds: {
       },
     ],
   },
-  {
+  redo: {
     isKey: isRedo,
     getCmds: (selection) => [
       {
@@ -3875,7 +3868,7 @@ const cmds: {
       },
     ],
   },
-  {
+  'delete backward': {
     isKey: isDeleteBackward,
     getCmds: (selection) => [
       {
@@ -3884,7 +3877,16 @@ const cmds: {
       },
     ],
   },
-];
+} satisfies {
+  [name: string]: {
+    isKey: (event: KeyboardEvent) => boolean;
+    icon?: {
+      isActive: (editorCtrl: EditorController) => boolean;
+      Icon: typeof ToolbarIcon;
+    };
+    getCmds: (selection: Selection, makeId: () => string) => Command[];
+  };
+};
 
 const useIsomorphicLayoutEffect =
   typeof window !== 'undefined' ? useLayoutEffect : useEffect;
@@ -3894,6 +3896,7 @@ function useCustomCompareMemo<T, TDependencyList extends React.DependencyList>(
   deps: readonly [...TDependencyList],
   depsAreEqual: DepsAreEqual<readonly [...TDependencyList]>,
 ): T {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(factory, useCustomCompareMemoize(deps, depsAreEqual));
 }
 
@@ -4018,10 +4021,13 @@ function ReactEditor({
     let newEditorCtrl = editorCtrl.current;
     console.log(queue);
     let dropValue: EditorValue | null = null;
-    let ignoreDelete: boolean = false;
+    let ignoreNext: boolean = false;
     let ignoreSelectionN = 0;
-    for (let i = 0; i < queue.length; i++) {
-      const command = queue[i];
+    function processCommand(command: Command, i: number | null): void {
+      if (ignoreNext) {
+        ignoreNext = false;
+        return;
+      }
       const originalSelection = command.selection;
       const inputSelection = mapSelectionFns.reduce(
         (selection, mapSelection) => mapSelection(selection, true),
@@ -4041,10 +4047,6 @@ function ReactEditor({
           case 'deleteHardLineBackward':
           case 'deleteSoftLineForward':
           case 'deleteHardLineForward': {
-            if (ignoreDelete) {
-              ignoreDelete = false;
-              continue;
-            }
             let action: PushStateAction;
             if (inputType === 'deleteByCut' || inputType === 'deleteByDrag') {
               action = PushStateAction.Unique;
@@ -4055,7 +4057,7 @@ function ReactEditor({
               copySelection(newEditorCtrl.value, inputSelection);
             }
             if (inputType === 'deleteByDrag') {
-              if (i < queue.length - 1) {
+              if (i !== null && i < queue.length - 1) {
                 const next = queue[i + 1];
                 if (
                   next.type === CommandType.Input &&
@@ -4192,6 +4194,50 @@ function ReactEditor({
             mapSelectionFns.push(edit.mapSelection);
             break;
           }
+          case 'historyUndo': {
+            processCommand(
+              {
+                type: CommandType.Undo,
+                selection: inputSelection,
+              },
+              null,
+            );
+            break;
+          }
+          case 'historyRedo': {
+            processCommand(
+              {
+                type: CommandType.Redo,
+                selection: inputSelection,
+              },
+              null,
+            );
+            break;
+          }
+          case 'formatBold':
+          case 'formatItalic':
+          case 'formatUnderline':
+          case 'formatStrikeThrough':
+          case 'formatSuperscript':
+          case 'formatSubscript':
+          case 'formatRemove': {
+            cmds[
+              (
+                {
+                  formatBold: 'bold',
+                  formatItalic: 'italic',
+                  formatUnderline: 'underline',
+                  formatStrikeThrough: 'strikethrough',
+                  formatSuperscript: 'superscript',
+                  formatSubscript: 'subscript',
+                  formatRemove: 'clear format',
+                } as const
+              )[inputType]
+            ]
+              .getCmds(inputSelection)
+              .forEach((cmd) => processCommand(cmd, null));
+            break;
+          }
         }
       } else if (command.type === CommandType.InlineFormat) {
         const edit = toggleInlineStyle(
@@ -4214,6 +4260,36 @@ function ReactEditor({
           newTextStyle,
           PushStateAction.Unique,
         );
+        if (
+          (
+            [
+              'bold shortcut',
+              'italic shortcut',
+              'underline shortcut',
+              'strikethrough shortcut',
+              'superscript shortcut',
+              'subscript shortcut',
+            ] as (string | undefined)[]
+          ).includes(command.origin) &&
+          i !== null &&
+          i + 1 < queue.length
+        ) {
+          const next = queue[i + 1];
+          if (
+            next.type === CommandType.Input &&
+            next.inputType ===
+              {
+                'bold shortcut': 'formatBold',
+                'italic shortcut': 'formatItalic',
+                'underline shortcut': 'formatUnderline',
+                'strikethrough shortcut': 'formatStrikeThrough',
+                'superscript shortcut': 'formatSuperscript',
+                'subscript shortcut': 'formatSubscript',
+              }[command.origin!]
+          ) {
+            ignoreNext = true;
+          }
+        }
       } else if (command.type === CommandType.BlockFormat) {
         const edit = toggleParagraphStyle(
           newEditorCtrl,
@@ -4252,9 +4328,22 @@ function ReactEditor({
           {},
           PushStateAction.Unique,
         );
+        if (
+          command.origin === 'clear format shortcut' &&
+          i !== null &&
+          i + 1 < queue.length
+        ) {
+          const next = queue[i + 1];
+          if (
+            next.type === CommandType.Input &&
+            next.inputType === 'formatRemove'
+          ) {
+            ignoreNext = true;
+          }
+        }
       } else if (command.type === CommandType.Undo) {
         if (newEditorCtrl.undos.length === 0) {
-          continue;
+          return;
         }
         const end = newEditorCtrl.undos[newEditorCtrl.undos.length - 1];
         newEditorCtrl = {
@@ -4268,7 +4357,7 @@ function ReactEditor({
         };
       } else if (command.type === CommandType.Redo) {
         if (newEditorCtrl.redos.length === 0) {
-          continue;
+          return;
         }
         const start = newEditorCtrl.redos[0];
         newEditorCtrl = {
@@ -4282,14 +4371,14 @@ function ReactEditor({
         };
       } else if (command.type === CommandType.DeleteBackwardKey) {
         if (!isCollapsed(inputSelection)) {
-          continue;
+          return;
         }
         const point = (inputSelection as BlockSelection).start;
         if (
           point.type !== BlockSelectionPointType.Paragraph ||
           point.offset !== 0
         ) {
-          continue;
+          return;
         }
         const res = walkEditorValues<boolean | undefined>(
           editorCtrl.current.value,
@@ -4340,7 +4429,7 @@ function ReactEditor({
             newEditorCtrl.textStyle,
             PushStateAction.Unique,
           );
-          if (i < queue.length - 1) {
+          if (i !== null && i < queue.length - 1) {
             const next = queue[i + 1];
             if (
               next.type === CommandType.Input &&
@@ -4349,17 +4438,24 @@ function ReactEditor({
                 next.inputType === 'deleteSoftLineBackward' ||
                 next.inputType === 'deleteHardLineBackward')
             ) {
-              ignoreDelete = true;
+              ignoreNext = true;
             }
           }
         }
       }
     }
-    editorCtrl.current = newEditorCtrl;
+    for (let i = 0; i < queue.length; i++) {
+      processCommand(queue[i], i);
+    }
     if (ignoreSelectionN < queue.length) {
       newDomSelectionRef.current = newEditorCtrl.selection;
     }
-    setRenderToggle((t) => !t);
+    if (editorCtrl.current !== newEditorCtrl) {
+      editorCtrl.current = newEditorCtrl;
+      flushSync(() => {
+        setRenderToggle((t) => !t);
+      });
+    }
   };
 
   useEffect(() => {
@@ -4468,9 +4564,12 @@ function ReactEditor({
               };
             }
           }
-        }
-        if (!data) {
-          console.log(parsedDocument);
+          if (!data) {
+            // const { body } = parsedDocument;
+            // function parseEditor(el:Element):EditorValue{
+            //   const nodeIterator = document.createNodeIterator(body, whatToShow, filter);
+            // }
+          }
         }
       }
       if (!data) {
@@ -4498,14 +4597,26 @@ function ReactEditor({
   };
 
   function queueCommand(command: Command): void {
+    function isBatch(cmd: Command): boolean {
+      return (
+        cmd.type === CommandType.DeleteBackwardKey ||
+        (cmd.type === CommandType.InlineFormat &&
+          (
+            [
+              'bold shortcut',
+              'italic shortcut',
+              'underline shortcut',
+              'strikethrough shortcut',
+              'superscript shortcut',
+              'subscript shortcut',
+              'remove shortcut',
+            ] as (string | undefined)[]
+          ).includes(command.origin)) ||
+        (cmd.type === CommandType.Input && cmd.inputType === 'deleteByDrag')
+      );
+    }
     if (inputQueueRef.current.length === 0) {
-      if (
-        !(command.type === CommandType.DeleteBackwardKey) &&
-        !(
-          command.type === CommandType.Input &&
-          command.inputType === 'deleteByDrag'
-        )
-      ) {
+      if (!isBatch(command)) {
         inputQueueRef.current.push(command);
         flushInputQueue();
         return;
@@ -4514,11 +4625,7 @@ function ReactEditor({
     } else {
       const lastCommand =
         inputQueueRef.current[inputQueueRef.current.length - 1];
-      if (
-        lastCommand.type === CommandType.DeleteBackwardKey ||
-        (lastCommand.type === CommandType.Input &&
-          lastCommand.inputType === 'deleteByDrag')
-      ) {
+      if (isBatch(lastCommand)) {
         cancelAnimationFrame(inputQueueRequestRef.current!);
         inputQueueRef.current.push(command);
         flushInputQueue();
@@ -4568,7 +4675,9 @@ function ReactEditor({
         getSelectionTextStyle(editorCtrl.current.value, curSelection),
         PushStateAction.Selection,
       );
-      setRenderToggle((t) => !t);
+      flushSync(() => {
+        setRenderToggle((t) => !t);
+      });
     }
   };
 
@@ -4620,14 +4729,16 @@ function ReactEditor({
     if (!editorCtrl.current.selection) {
       return;
     }
-    for (let i = 0; i < cmds.length; i++) {
-      const cmd = cmds[i];
+    const cmdKV = Object.entries(cmds);
+    for (let i = 0; i < cmdKV.length; i++) {
+      const [_name, cmd] = cmdKV[i];
       if (cmd.isKey(event)) {
         cmd
           .getCmds(editorCtrl.current.selection, editorCtrl.current.makeId)
           .forEach((command) => {
             queueCommand(command);
           });
+        break;
       }
     }
   };
@@ -4813,6 +4924,7 @@ function ReactEditor({
         editorCtrl.current.value,
         editorCtrl.current.selection,
       ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [editorCtrl.current.value, editorCtrl.current.selection],
   );
   const selectedEditors = useCustomCompareMemo(
@@ -4824,6 +4936,7 @@ function ReactEditor({
 
   const listBlockIdToIdx_ = useMemo(
     () => getListBlockIdToIdx(editorCtrl.current.value),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [editorCtrl.current.value],
   );
   const listBlockIdToIdx = useCustomCompareMemo(
@@ -4837,17 +4950,23 @@ function ReactEditor({
       );
     },
   );
-
   return (
     <>
       <div className="toolbar" onMouseDown={onEditorToolbarMouseDown}>
-        {cmds
-          .filter((cmd) => cmd.icon)
-          .map((cmd) => {
+        {Object.entries(cmds)
+          .filter(
+            (
+              a,
+            ): a is [
+              string,
+              Extract<typeof cmds[keyof typeof cmds], { icon: object }>,
+            ] => 'icon' in a[1] && a[1].icon !== undefined,
+          )
+          .map(([name, cmd]) => {
             const isActive = editorCtrl.current.selection
-              ? cmd.icon!.isActive(editorCtrl.current)
+              ? cmd.icon.isActive(editorCtrl.current)
               : false;
-            const Icon = cmd.icon!.Icon;
+            const Icon = cmd.icon.Icon;
             const handle = () => {
               if (editorCtrl.current.selection) {
                 cmd
@@ -4861,7 +4980,7 @@ function ReactEditor({
               }
             };
             return (
-              <Tooltip info={cmd.icon!.name} key={cmd.icon!.name}>
+              <Tooltip info={name} key={name}>
                 {({ focused }) => (
                   <Icon
                     onMouseDown={handle}
