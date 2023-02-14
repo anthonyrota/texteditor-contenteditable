@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -391,14 +392,19 @@ const ReactTableNode_m = memo(ReactTableNode_, (a, b) => {
 });
 function ReactTableNode({ value }: ReactTableNodeProps): JSX.Element {
   const selectedEditors = useContext(SelectedEditorsContext);
-  const selectedCells: string[] = [];
-  value.rows.forEach((row) => {
-    row.cells.forEach((cell) => {
-      if (selectedEditors.includes(cell.value.id)) {
-        selectedCells.push(cell.value.id);
-      }
+  const selectedCells = useMemo(() => {
+    let selectedCells: string[] = [];
+    value.rows.forEach((row) => {
+      row.cells.forEach((cell) => {
+        if (selectedEditors.includes(cell.value.id)) {
+          selectedCells.push(cell.value.id);
+        }
+      });
     });
-  });
+    return selectedCells;
+  }, [value, selectedEditors]);
+  if (selectedEditors.length !== 0) {
+  }
   return <ReactTableNode_m value={value} selectedCells={selectedCells} />;
 }
 
@@ -604,8 +610,15 @@ function groupArr<T, G>(
   return groups;
 }
 
-function ReactEditorValue_({ value }: { value: EditorValue }): JSX.Element {
-  const listBlockIdToIdx = useContext(NumberedListIndicesContext);
+interface ReactEditorValueProps {
+  value: EditorValue;
+}
+function ReactEditorValue_({
+  value,
+  listBlockIdToIdx,
+}: ReactEditorValueProps & {
+  listBlockIdToIdx: Record<string, number>;
+}): JSX.Element {
   let children: JSX.Element[] = [];
   groupArr(
     value.blocks,
@@ -695,7 +708,13 @@ function ReactEditorValue_({ value }: { value: EditorValue }): JSX.Element {
     </div>
   );
 }
-const ReactEditorValue = memo(ReactEditorValue_);
+const ReactEditorValue_m = memo(ReactEditorValue_);
+function ReactEditorValue({ value }: ReactEditorValueProps): JSX.Element {
+  const listBlockIdToIdx = useContext(NumberedListIndicesContext);
+  return (
+    <ReactEditorValue_m value={value} listBlockIdToIdx={listBlockIdToIdx} />
+  );
+}
 
 /**
  * From a DOM selection's `node` and `offset`, normalize so that it always
@@ -894,7 +913,7 @@ function walkEditorValues<T>(
       parentEditor: EditorValue;
       parentBlock: Extract<BlockNode, { isBlock: true }>;
     } | null,
-  ) => { data: T; newValue?: EditorValue; stop: boolean },
+  ) => { data: T; newValue?: EditorValue; stop: boolean; stopCur?: boolean },
   initialData: T,
   willMap: boolean,
   onBlock?: (block: BlockNode) => void,
@@ -917,6 +936,7 @@ function walkEditorValues<T>(
               data: newData,
               newValue,
               stop,
+              stopCur,
             } = onEditorValue(cell.value, data, {
               parentEditor: value,
               parentBlock: block,
@@ -930,7 +950,7 @@ function walkEditorValues<T>(
             if (stop) {
               didStop = true;
               retValue = newData;
-            } else {
+            } else if (!stopCur) {
               walk(newValue || cell.value, newData);
             }
           }
@@ -3869,6 +3889,32 @@ const cmds: {
 const useIsomorphicLayoutEffect =
   typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
+function useCustomCompareMemo<T, TDependencyList extends React.DependencyList>(
+  factory: () => T,
+  deps: readonly [...TDependencyList],
+  depsAreEqual: DepsAreEqual<readonly [...TDependencyList]>,
+): T {
+  return useMemo(factory, useCustomCompareMemoize(deps, depsAreEqual));
+}
+
+type DepsAreEqual<TDependencyList extends React.DependencyList> = (
+  prevDeps: TDependencyList,
+  nextDeps: TDependencyList,
+) => boolean;
+
+function useCustomCompareMemoize<TDependencyList extends React.DependencyList>(
+  deps: readonly [...TDependencyList],
+  depsAreEqual: DepsAreEqual<readonly [...TDependencyList]>,
+) {
+  const ref = useRef<readonly [...TDependencyList] | undefined>(undefined);
+
+  if (!ref.current || !depsAreEqual(ref.current, deps)) {
+    ref.current = deps;
+  }
+
+  return ref.current;
+}
+
 function ReactEditor({
   initialValue,
   makeId,
@@ -4475,7 +4521,6 @@ function ReactEditor({
       ) {
         cancelAnimationFrame(inputQueueRequestRef.current!);
         inputQueueRef.current.push(command);
-        console.log('flushing!');
         flushInputQueue();
         return;
       }
@@ -4605,14 +4650,34 @@ function ReactEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function getSelectedEditors(editorCtrl: EditorController): string[] {
-    const { selection } = editorCtrl;
-    if (!selection) {
+  function getSelectedEditors(
+    value: EditorValue,
+    selection: Selection | null,
+  ): string[] {
+    if (!selection || isCollapsed(selection)) {
       return [];
     }
     const selected: string[] = [];
+    if (
+      selection.editorId === value.id &&
+      selection.type === SelectionType.Block
+    ) {
+      const startBlockIndex = value.blocks.findIndex(
+        (block) => block.id === selection.start.blockId,
+      );
+      const endBlockIndex = value.blocks.findIndex(
+        (block) => block.id === selection.end.blockId,
+      );
+      value = makeEditorValue(
+        value.blocks.slice(
+          Math.min(startBlockIndex, endBlockIndex),
+          Math.max(startBlockIndex, endBlockIndex) + 1,
+        ),
+        value.id,
+      );
+    }
     walkEditorValues(
-      editorCtrl.value,
+      value,
       (subValue, isSelected, ids) => {
         if (isSelected) {
           selected.push(subValue.id);
@@ -4648,6 +4713,12 @@ function ReactEditor({
               stop: false,
               data: true,
             };
+          } else {
+            return {
+              stop: false,
+              data: true,
+              stopCur: true,
+            };
           }
         }
         if (
@@ -4673,6 +4744,12 @@ function ReactEditor({
             return {
               stop: false,
               data: true,
+            };
+          } else {
+            return {
+              stop: false,
+              data: true,
+              stopCur: true,
             };
           }
         }
@@ -4730,6 +4807,37 @@ function ReactEditor({
     e.preventDefault();
   };
 
+  const selectedEditors_ = useMemo(
+    () =>
+      getSelectedEditors(
+        editorCtrl.current.value,
+        editorCtrl.current.selection,
+      ),
+    [editorCtrl.current.value, editorCtrl.current.selection],
+  );
+  const selectedEditors = useCustomCompareMemo(
+    () => selectedEditors_,
+    [selectedEditors_],
+    (prev, cur) =>
+      prev.length === cur.length && prev.every((v, i) => v === cur[i]),
+  );
+
+  const listBlockIdToIdx_ = useMemo(
+    () => getListBlockIdToIdx(editorCtrl.current.value),
+    [editorCtrl.current.value],
+  );
+  const listBlockIdToIdx = useCustomCompareMemo(
+    () => listBlockIdToIdx_,
+    [listBlockIdToIdx_],
+    ([prev], [cur]) => {
+      const pKeys = Object.keys(prev);
+      return (
+        pKeys.length === Object.keys(cur).length &&
+        pKeys.every((k) => prev[k] === cur[k])
+      );
+    },
+  );
+
   return (
     <>
       <div className="toolbar" onMouseDown={onEditorToolbarMouseDown}>
@@ -4770,12 +4878,8 @@ function ReactEditor({
         suppressContentEditableWarning
         ref={editorRef}
       >
-        <SelectedEditorsContext.Provider
-          value={getSelectedEditors(editorCtrl.current)}
-        >
-          <NumberedListIndicesContext.Provider
-            value={getListBlockIdToIdx(editorCtrl.current.value)}
-          >
+        <SelectedEditorsContext.Provider value={selectedEditors}>
+          <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
             <ReactEditorValue value={editorCtrl.current.value} />
           </NumberedListIndicesContext.Provider>
         </SelectedEditorsContext.Provider>
