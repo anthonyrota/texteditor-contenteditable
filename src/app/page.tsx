@@ -233,7 +233,7 @@ function makeDefaultParagraph(
 ): ParagraphNode {
   return makeParagraph(children, { type: ParagraphStyleType.Default }, id);
 }
-function makeHeadingParagraph(
+function makeSubtitleParagraph(
   children: InlineNode[],
   id: string,
 ): ParagraphNode {
@@ -411,7 +411,8 @@ function ReactTableNode({ value }: ReactTableNodeProps): JSX.Element {
 
 function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
   return (
-    <Image
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
       data-family={EditorFamilyType.Block}
       data-type={BlockNodeType.Image}
       data-id={value.id}
@@ -473,18 +474,6 @@ function ReactParagraphNode_(
     }
     case ParagraphStyleType.Subtitle: {
       return (
-        <h1
-          data-family={EditorFamilyType.Block}
-          data-type={BlockNodeType.Paragraph}
-          data-empty-paragraph={isEmpty}
-          data-id={value.id}
-        >
-          {children}
-        </h1>
-      );
-    }
-    case ParagraphStyleType.Title: {
-      return (
         <h2
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -493,6 +482,18 @@ function ReactParagraphNode_(
         >
           {children}
         </h2>
+      );
+    }
+    case ParagraphStyleType.Title: {
+      return (
+        <h1
+          data-family={EditorFamilyType.Block}
+          data-type={BlockNodeType.Paragraph}
+          data-empty-paragraph={isEmpty}
+          data-id={value.id}
+        >
+          {children}
+        </h1>
       );
     }
     case ParagraphStyleType.Quote: {
@@ -3395,7 +3396,7 @@ function scrollIntoView(
   // https://bugs.webkit.org/show_bug.cgi?id=138949
   // https://bugs.chromium.org/p/chromium/issues/detail?id=435438
   if (range.collapsed && cursorRect.top === 0 && cursorRect.height === 0) {
-    if (range.startContainer.nodeName === 'BR') {
+    if (range.startContainer.nodeName.toLowerCase() === 'BR') {
       cursorRect = (
         range.startContainer as HTMLElement
       ).getBoundingClientRect();
@@ -3916,6 +3917,368 @@ function useCustomCompareMemoize<TDependencyList extends React.DependencyList>(
   }
 
   return ref.current;
+}
+
+function getUserComputedStyle(
+  element: HTMLElement,
+  names: readonly (keyof {
+    [k in keyof CSSStyleDeclaration as CSSStyleDeclaration[k] extends string
+      ? k
+      : never]: string;
+  })[],
+): CSSStyleDeclaration {
+  const clonedStyle = document.createElement(
+    element.tagName.toLowerCase(),
+  ).style;
+  const computedStyles = getComputedStyle(element);
+  const inlineStyles = element.style;
+
+  Object.values(computedStyles)
+    .filter((value) => names.includes(value as any))
+    .forEach((style) => {
+      const value = computedStyles.getPropertyValue(style);
+      const inlineValue = inlineStyles.getPropertyValue(style);
+
+      inlineStyles.setProperty(style, 'initial');
+      const initialValue = computedStyles.getPropertyValue(style);
+
+      if (initialValue !== value) {
+        clonedStyle.setProperty(style, value);
+      } else {
+        clonedStyle.removeProperty(style);
+      }
+
+      inlineStyles.setProperty(style, inlineValue);
+    });
+
+  return clonedStyle;
+}
+
+const defaultStyleCache = new Map<string, CSSStyleDeclaration>();
+
+function getDefaultStyle(
+  element: HTMLElement,
+  names: readonly (keyof {
+    [k in keyof CSSStyleDeclaration as CSSStyleDeclaration[k] extends string
+      ? k
+      : never]: string;
+  })[],
+): CSSStyleDeclaration {
+  const cacheKey = element.tagName.toLowerCase() + '@@' + names.join('@@');
+  if (defaultStyleCache.has(cacheKey)) {
+    return defaultStyleCache.get(cacheKey)!;
+  }
+  const cloned = document.createElement(element.tagName.toLowerCase());
+  document.body.append(cloned);
+  const defaults = getUserComputedStyle(cloned, names);
+  cloned.remove();
+  defaultStyleCache.set(cacheKey, defaults);
+  return defaults;
+}
+
+function getStyle(
+  name: keyof {
+    [k in keyof CSSStyleDeclaration as CSSStyleDeclaration[k] extends string
+      ? k
+      : never]: string;
+  },
+  styleProps: readonly (keyof {
+    [k in keyof CSSStyleDeclaration as CSSStyleDeclaration[k] extends string
+      ? k
+      : never]: string;
+  })[],
+  element: HTMLElement,
+  parents: HTMLElement[],
+): string {
+  if (!element.style[name]) {
+    const defaultS = getDefaultStyle(element, styleProps)[name];
+    if (defaultS) {
+      return defaultS;
+    }
+  }
+  if (
+    !element.style[name] ||
+    element.style[name] === 'inherit'
+    // || e.style[name] === 'unset'
+  ) {
+    if (parents.length === 0) {
+      return '';
+    }
+    return getStyle(name, styleProps, parents[0], parents.slice(1));
+  }
+  if (element.style[name] === 'initial') {
+    return getDefaultStyle(element, styleProps)[name];
+  }
+  return element.style[name];
+}
+
+function getTextStylesFromElement(
+  element: HTMLElement,
+  parents: HTMLElement[],
+): TextStyle {
+  const styleProps = [
+    'fontWeight',
+    'fontStyle',
+    'textDecorationLine',
+    'verticalAlign',
+  ] as const;
+
+  const fontWeight = getStyle('fontWeight', styleProps, element, parents);
+  const fontStyle = getStyle('fontStyle', styleProps, element, parents);
+  const textDecorationLine = getStyle(
+    'textDecorationLine',
+    styleProps,
+    element,
+    parents,
+  );
+  const verticalAlign = getStyle('verticalAlign', styleProps, element, parents);
+
+  return {
+    bold: Number(fontWeight) >= 700 ? true : undefined,
+    italic:
+      fontStyle === 'italic' || fontStyle === 'oblique' ? true : undefined,
+    underline: textDecorationLine === 'underline' ? true : undefined,
+    strikethrough: textDecorationLine === 'line-through' ? true : undefined,
+    script:
+      verticalAlign === 'sup'
+        ? TextScript.Superscript
+        : verticalAlign === 'sub'
+        ? TextScript.Subscript
+        : undefined,
+    code: parents.some((el) => el.tagName.toLowerCase() === 'code')
+      ? true
+      : undefined,
+  };
+}
+
+function convertFromElToEditorValue(
+  document: Document,
+  el: HTMLElement,
+  makeId: () => string,
+): EditorValue {
+  console.log('converting html', el);
+  const walker = document.createTreeWalker(
+    el,
+    NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        if (node.parentNode!.nodeName.toLowerCase() === 'table') {
+          return NodeFilter.FILTER_REJECT;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    },
+  );
+  let node: Node | null;
+  const blocks: BlockNode[] = [];
+  function isBlock(node: Node) {
+    return (
+      node instanceof HTMLElement &&
+      ['block', 'flex', 'grid', 'list-item', 'table'].includes(
+        getStyle('display', ['display'], node, []),
+      )
+    );
+  }
+  function getBlockParent(node: Node): HTMLElement | null {
+    let parent: HTMLElement | null = node as HTMLElement;
+    while ((parent = parent!.parentElement) && parent !== el) {
+      if (isBlock(parent)) {
+        return parent;
+      }
+    }
+    return null;
+  }
+  const idCache = new Map<any, string>();
+  function makeIdCached(value: any): string {
+    if (!idCache.has(value)) {
+      const id = makeId();
+      idCache.set(value, id);
+      return id;
+    }
+    return idCache.get(value)!;
+  }
+  function makeParagraphFromNode(node: Node): ParagraphNode {
+    let blockParents: HTMLElement[] = [];
+    let parent: HTMLElement | null = node as HTMLElement;
+    while ((parent = parent!.parentElement) && parent !== el) {
+      if (
+        isBlock(parent) && [
+          'h1',
+          'h2',
+          'h3',
+          'h4',
+          'h5',
+          'h6',
+          'ol',
+          'li',
+          'blockquote',
+        ]
+      ) {
+        blockParents.push(parent);
+      }
+    }
+    if (blockParents.length === 0) {
+      return makeDefaultParagraph([], makeId());
+    }
+    const firstLiIdx = blockParents.findIndex(
+      (el) => el.tagName.toLowerCase() === 'li',
+    );
+    if (firstLiIdx !== -1) {
+      const ulIdx = blockParents
+        .slice(firstLiIdx + 1)
+        .findIndex((el) => el.tagName.toLowerCase() === 'ul');
+      const olIdx = blockParents
+        .slice(firstLiIdx + 1)
+        .findIndex((el) => el.tagName.toLowerCase() === 'ol');
+      if (olIdx !== -1) {
+        if (ulIdx === -1 || ulIdx > olIdx) {
+          return makeNumberedListParagraph(
+            [],
+            makeIdCached(blockParents[olIdx + firstLiIdx + 1]),
+            makeId(),
+          );
+        }
+      }
+      return makeBulletListParagraph(
+        [],
+        ulIdx !== -1
+          ? makeIdCached(blockParents[ulIdx + firstLiIdx + 1])
+          : makeId(),
+        makeId(),
+      );
+    }
+    if (blockParents[0].tagName.toLowerCase().startsWith('h')) {
+      const n = Number(blockParents[0].tagName.toLowerCase()[1]);
+      if (n < 3) {
+        return makeTitleParagraph([], makeId());
+      } else {
+        return makeSubtitleParagraph([], makeId());
+      }
+    }
+    if (blockParents[0].tagName.toLowerCase().startsWith('blockquote')) {
+      return makeQuoteParagraph([], makeId());
+    }
+    return makeDefaultParagraph([], makeId());
+  }
+  let prevBlockParent: HTMLElement | null | undefined = null;
+  while ((node = walker.nextNode())) {
+    let parentElements: HTMLElement[] = [];
+    let temp: HTMLElement | null = node as HTMLElement;
+    while ((temp = temp!.parentElement)) {
+      parentElements.push(temp);
+    }
+    if (isBlock(node)) {
+      const blockEl = node as Element;
+      if (
+        blockEl.tagName.toLowerCase() === 'img' &&
+        blockEl.hasAttribute('src')
+      ) {
+        blocks.push(
+          makeImage(
+            blockEl.getAttribute('src')!,
+            blockEl.getAttribute('alt') || '',
+            makeId(),
+          ),
+        );
+        prevBlockParent = null;
+      } else if (blockEl.tagName.toLowerCase() === 'table') {
+        const rows: TableRow[] = [];
+        let maxCols = 0;
+        for (let i = 0; i < blockEl.childNodes.length; i++) {
+          const tContainer = blockEl.childNodes[i];
+          if (
+            !tContainer ||
+            (tContainer.nodeName.toLowerCase() !== 'thead' &&
+              tContainer.nodeName.toLowerCase() !== 'tbody' &&
+              tContainer.nodeName.toLowerCase() !== 'tfoot')
+          ) {
+            continue;
+          }
+          for (let i = 0; i < tContainer.childNodes.length; i++) {
+            const tr = tContainer.childNodes[i];
+            if (tr.nodeName.toLowerCase() !== 'tr') {
+              continue;
+            }
+            const cells: TableCell[] = [];
+            for (let i = 0; i < tr.childNodes.length; i++) {
+              const cellNode = tr.childNodes[i];
+              if (
+                cellNode.nodeName.toLowerCase() !== 'th' &&
+                cellNode.nodeName.toLowerCase() !== 'td'
+              ) {
+                continue;
+              }
+              cells.push(
+                makeTableCell(
+                  convertFromElToEditorValue(
+                    document,
+                    cellNode as HTMLElement,
+                    makeId,
+                  ),
+                  makeId(),
+                ),
+              );
+            }
+            if (cells.length === 0) {
+              continue;
+            }
+            maxCols = Math.max(maxCols, cells.length);
+            rows.push(makeTableRow(cells, makeId()));
+          }
+        }
+        if (rows.length === 0) {
+          prevBlockParent = undefined;
+          continue;
+        }
+        blocks.push(makeTable(rows, maxCols, makeId()));
+        prevBlockParent = null;
+        continue;
+      }
+      prevBlockParent = undefined;
+      continue;
+    }
+    const parentBlock = getBlockParent(node);
+    if (node.nodeName.toLowerCase() === 'br') {
+      const style = getTextStylesFromElement(
+        node.parentElement!,
+        parentElements,
+      );
+      const para = makeParagraphFromNode(node);
+      para.children.push(makeText('', style, makeId()));
+      blocks.push(para);
+      prevBlockParent = parentBlock;
+      continue;
+    }
+    if (node.nodeType === Node.TEXT_NODE && node.textContent) {
+      const text = node.textContent;
+      const style = getTextStylesFromElement(
+        node.parentElement!,
+        parentElements,
+      );
+      const lastBlock =
+        blocks.length > 0 ? blocks[blocks.length - 1] : undefined;
+      if (parentBlock === prevBlockParent && lastBlock && !lastBlock.isBlock) {
+        lastBlock.children.push(makeText(text, style, makeId()));
+      } else {
+        const para = makeParagraphFromNode(node);
+        para.children.push(makeText(text, style, makeId()));
+        blocks.push(para);
+      }
+      prevBlockParent = parentBlock;
+    }
+  }
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (!block.isBlock) {
+      blocks[i] = fixParagraph(block);
+    }
+  }
+  return makeEditorValue(
+    blocks.length === 0
+      ? [makeDefaultParagraph([makeDefaultText('', makeId())], makeId())]
+      : blocks,
+    makeId(),
+  );
 }
 
 function ReactEditor({
@@ -4565,10 +4928,14 @@ function ReactEditor({
             }
           }
           if (!data) {
-            // const { body } = parsedDocument;
-            // function parseEditor(el:Element):EditorValue{
-            //   const nodeIterator = document.createNodeIterator(body, whatToShow, filter);
-            // }
+            data = {
+              type: DataTransferType.Rich,
+              value: convertFromElToEditorValue(
+                parsedDocument,
+                parsedDocument.body,
+                makeId,
+              ),
+            };
           }
         }
       }
