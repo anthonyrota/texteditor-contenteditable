@@ -922,7 +922,7 @@ i {
 }
 
 .markdown-body table td.not-selected *::selection {
-  background-color: inherit;
+  background-color: transparent;
 }
 
 .markdown-body table img {
@@ -1031,17 +1031,26 @@ i {
   text-align: right;
 }
 
-.markdown-body code,
-.markdown-body tt {
-  padding: 0.2em 0.4em;
+.markdown-body code {
+  padding: 0.2em 0;
   margin: 0;
   font-size: 85%;
   background-color: rgba(175, 184, 193, 0.2);
-  border-radius: 6px;
 }
 
-.markdown-body code br,
-.markdown-body tt br {
+.markdown-body .code-first {
+  padding-left: 0.4em;
+  border-top-left-radius: 6px;
+  border-bottom-left-radius: 6px;
+}
+
+.markdown-body .code-last {
+  padding-right: 0.4em;
+  border-top-right-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+.markdown-body code br {
   display: none;
 }
 

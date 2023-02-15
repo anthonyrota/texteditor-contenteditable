@@ -445,13 +445,26 @@ function ReactParagraphNode_(
   const children = isEmpty ? (
     <br />
   ) : (
-    value.children.map((child) => {
+    value.children.map((child, i) => {
       switch (child.type) {
         case InlineNodeType.Text: {
+          let cn: string | undefined;
+          if (child.style.code) {
+            const prevChild = i === 0 ? null : value.children[i - 1];
+            if (!prevChild || (!prevChild.isBlock && !prevChild.style.code)) {
+              cn = (cn ? cn + ' ' : (cn = '')) + 'code-first';
+            }
+            const nextChild =
+              i === value.children.length - 1 ? null : value.children[i + 1];
+            if (!nextChild || (!nextChild.isBlock && !nextChild.style.code)) {
+              cn = (cn ? cn + ' ' : (cn = '')) + 'code-last';
+            }
+          }
           return (
             <ReactTextNode
               data-family={EditorFamilyType.Inline}
               value={child}
+              className={cn}
               key={child.id}
             />
           );
@@ -549,7 +562,13 @@ function ReactParagraphNode_(
 }
 const ReactParagraphNode = memo(ReactParagraphNode_);
 
-function ReactTextNode({ value }: { value: TextNode }): JSX.Element {
+function ReactTextNode({
+  value,
+  className,
+}: {
+  value: TextNode;
+  className?: string;
+}): JSX.Element {
   let text: JSX.Element | string = value.text;
   if (value.style.bold) {
     text = <b>{text}</b>;
@@ -560,11 +579,11 @@ function ReactTextNode({ value }: { value: TextNode }): JSX.Element {
   if (value.style.underline) {
     text = <u>{text}</u>;
   }
+  if (value.style.strikethrough) {
+    text = <s>{text}</s>;
+  }
   if (value.style.code) {
     text = <code>{text}</code>;
-  }
-  if (value.style.strikethrough) {
-    text = <del>{text}</del>;
   }
   if (value.style.script === TextScript.Superscript) {
     text = <sup>{text}</sup>;
@@ -574,7 +593,7 @@ function ReactTextNode({ value }: { value: TextNode }): JSX.Element {
   }
   if (typeof text !== 'string') {
     return cloneElement(text, {
-      className: 'inline-text',
+      className: 'inline-text' + (className ? ` ${className}` : ''),
       'data-family': EditorFamilyType.Inline,
       'data-type': InlineNodeType.Text,
       'data-id': value.id,
@@ -582,7 +601,7 @@ function ReactTextNode({ value }: { value: TextNode }): JSX.Element {
   }
   return (
     <span
-      className="inline-text"
+      className={'inline-text' + (className ? ` ${className}` : '')}
       data-family={EditorFamilyType.Inline}
       data-type={InlineNodeType.Text}
       data-id={value.id}
@@ -1478,7 +1497,7 @@ function removeTextFromParagraph(
 
 function fixSelection(value: EditorValue, selection: Selection): Selection {
   if (
-    selection.type === SelectionType.Table ||
+    selection.type !== SelectionType.Block ||
     selection.start.type !== BlockSelectionPointType.OtherBlock ||
     selection.start.blockId !== selection.end.blockId
   ) {
@@ -1497,6 +1516,16 @@ function fixSelection(value: EditorValue, selection: Selection): Selection {
         (block) => block.id === selection.start.blockId,
       )!;
       if (block.type === BlockNodeType.Table) {
+        console.log({
+          type: SelectionType.Table,
+          editorId: subValue.id,
+          tableId: block.id,
+          startCell: { rowIndex: 0, columnIndex: 0 },
+          endCell: {
+            rowIndex: block.rows.length - 1,
+            columnIndex: block.numColumns - 1,
+          },
+        });
         return {
           stop: true,
           data: {
@@ -2735,7 +2764,15 @@ function extractSelection(
                       row.id,
                     ),
                   ),
-                table.numColumns,
+                Math.max(
+                  range.startCell.columnIndex,
+                  range.endCell.columnIndex,
+                ) +
+                  1 -
+                  Math.min(
+                    range.startCell.columnIndex,
+                    range.endCell.columnIndex,
+                  ),
                 table.id,
               ),
             ],
@@ -3919,79 +3956,284 @@ function useCustomCompareMemoize<TDependencyList extends React.DependencyList>(
   return ref.current;
 }
 
-function getUserComputedStyle(
-  element: HTMLElement,
-  names: readonly (keyof {
-    [k in keyof CSSStyleDeclaration as CSSStyleDeclaration[k] extends string
-      ? k
-      : never]: string;
-  })[],
-): CSSStyleDeclaration {
-  const clonedStyle = document.createElement(
-    element.tagName.toLowerCase(),
-  ).style;
-  const computedStyles = getComputedStyle(element);
-  const inlineStyles = element.style;
-
-  Object.values(computedStyles)
-    .filter((value) => names.includes(value as any))
-    .forEach((style) => {
-      const value = computedStyles.getPropertyValue(style);
-      const inlineValue = inlineStyles.getPropertyValue(style);
-
-      inlineStyles.setProperty(style, 'initial');
-      const initialValue = computedStyles.getPropertyValue(style);
-
-      if (initialValue !== value) {
-        clonedStyle.setProperty(style, value);
-      } else {
-        clonedStyle.removeProperty(style);
-      }
-
-      inlineStyles.setProperty(style, inlineValue);
-    });
-
-  return clonedStyle;
-}
-
-const defaultStyleCache = new Map<string, CSSStyleDeclaration>();
-
-function getDefaultStyle(
-  element: HTMLElement,
-  names: readonly (keyof {
-    [k in keyof CSSStyleDeclaration as CSSStyleDeclaration[k] extends string
-      ? k
-      : never]: string;
-  })[],
-): CSSStyleDeclaration {
-  const cacheKey = element.tagName.toLowerCase() + '@@' + names.join('@@');
-  if (defaultStyleCache.has(cacheKey)) {
-    return defaultStyleCache.get(cacheKey)!;
-  }
-  const cloned = document.createElement(element.tagName.toLowerCase());
-  document.body.append(cloned);
-  const defaults = getUserComputedStyle(cloned, names);
-  cloned.remove();
-  defaultStyleCache.set(cacheKey, defaults);
-  return defaults;
-}
+const defaultStyles: {
+  [tag: string]: { [prop: string]: string | undefined } | undefined;
+} = {
+  article: {
+    display: 'block',
+  },
+  aside: {
+    display: 'block',
+  },
+  details: {
+    display: 'block',
+  },
+  div: {
+    display: 'block',
+  },
+  dt: {
+    display: 'block',
+  },
+  figcaption: {
+    display: 'block',
+  },
+  footer: {
+    display: 'block',
+  },
+  form: {
+    display: 'block',
+  },
+  header: {
+    display: 'block',
+  },
+  hgroup: {
+    display: 'block',
+  },
+  html: {
+    display: 'block',
+  },
+  main: {
+    display: 'block',
+  },
+  nav: {
+    display: 'block',
+  },
+  section: {
+    display: 'block',
+  },
+  summary: {
+    display: 'block',
+  },
+  body: {
+    display: 'block',
+  },
+  p: {
+    display: 'block',
+  },
+  dl: {
+    display: 'block',
+  },
+  multicol: {
+    display: 'block',
+  },
+  dd: {
+    display: 'block',
+  },
+  blockquote: {
+    display: 'block',
+  },
+  figure: {
+    display: 'block',
+  },
+  address: {
+    display: 'block',
+    fontStyle: 'italic',
+  },
+  center: {
+    display: 'block',
+  },
+  h1: {
+    display: 'block',
+    fontWeight: 'bold',
+  },
+  h2: {
+    display: 'block',
+    fontWeight: 'bold',
+  },
+  h3: {
+    display: 'block',
+    fontWeight: 'bold',
+  },
+  h4: {
+    display: 'block',
+    fontWeight: 'bold',
+  },
+  h5: {
+    display: 'block',
+    fontWeight: 'bold',
+  },
+  h6: {
+    display: 'block',
+    fontWeight: 'bold',
+  },
+  pre: {
+    display: 'block',
+    whiteSpace: 'pre',
+  },
+  table: {
+    display: 'table',
+    textIndent: '0',
+  },
+  caption: {
+    display: 'table-caption',
+    textAlign: 'center',
+  },
+  tr: {
+    display: 'table-row',
+    verticalAlign: 'inherit',
+  },
+  col: {
+    display: 'table-column',
+  },
+  colgroup: {
+    display: 'table-column-group',
+  },
+  tbody: {
+    display: 'table-row-group',
+    verticalAlign: 'middle',
+  },
+  thead: {
+    display: 'table-header-group',
+    verticalAlign: 'middle',
+  },
+  tfoot: {
+    display: 'table-footer-group',
+    verticalAlign: 'middle',
+  },
+  td: {
+    display: 'table-cell',
+    verticalAlign: 'inherit',
+    textAlign: 'inherit',
+  },
+  th: {
+    display: 'table-cell',
+    verticalAlign: 'inherit',
+    fontWeight: '700',
+    textAlign: 'inherit',
+  },
+  b: {
+    fontWeight: '700',
+  },
+  strong: {
+    fontWeight: '700',
+  },
+  i: {
+    fontStyle: 'italic',
+  },
+  cite: {
+    fontStyle: 'italic',
+  },
+  em: {
+    fontStyle: 'italic',
+  },
+  var: {
+    fontStyle: 'italic',
+  },
+  dfn: {
+    fontStyle: 'italic',
+  },
+  u: {
+    textDecoration: 'underline',
+  },
+  ins: {
+    textDecoration: 'underline',
+  },
+  s: {
+    textDecoration: 'line-through',
+  },
+  strike: {
+    textDecoration: 'line-through',
+  },
+  del: {
+    textDecoration: 'line-through',
+  },
+  sub: {
+    verticalAlign: 'sub',
+  },
+  sup: {
+    verticalAlign: 'super',
+  },
+  /* lists */
+  ul: {
+    display: 'block',
+  },
+  menu: {
+    display: 'block',
+  },
+  dir: {
+    display: 'block',
+  },
+  ol: {
+    display: 'block',
+  },
+  li: {
+    display: 'list-item',
+    textAlign: 'inherit',
+  },
+  hr: {
+    display: 'block',
+  },
+  frameset: {
+    display: 'block',
+  },
+  base: {
+    display: 'none',
+  },
+  basefont: {
+    display: 'none',
+  },
+  datalist: {
+    display: 'none',
+  },
+  head: {
+    display: 'none',
+  },
+  link: {
+    display: 'none',
+  },
+  meta: {
+    display: 'none',
+  },
+  noembed: {
+    display: 'none',
+  },
+  noframes: {
+    display: 'none',
+  },
+  param: {
+    display: 'none',
+  },
+  rp: {
+    display: 'none',
+  },
+  script: {
+    display: 'none',
+  },
+  style: {
+    display: 'none',
+  },
+  template: {
+    display: 'none',
+  },
+  title: {
+    display: 'none',
+  },
+  area: {
+    display: 'none',
+  },
+  dialog: {
+    display: 'block',
+  },
+  marquee: {
+    display: 'inline-block',
+    verticalAlign: 'text-bottom',
+    textAlign: 'start',
+  },
+};
 
 function getStyle(
   name: keyof {
-    [k in keyof CSSStyleDeclaration as CSSStyleDeclaration[k] extends string
+    [k in keyof CSSStyleDeclaration as k extends number
+      ? never
+      : CSSStyleDeclaration[k] extends string
       ? k
       : never]: string;
   },
-  styleProps: readonly (keyof {
-    [k in keyof CSSStyleDeclaration as CSSStyleDeclaration[k] extends string
-      ? k
-      : never]: string;
-  })[],
   element: HTMLElement,
   parents: HTMLElement[],
-): string {
+): string | undefined {
   if (!element.style[name]) {
-    const defaultS = getDefaultStyle(element, styleProps)[name];
+    const defaultS = defaultStyles[element.tagName.toLowerCase()]?.[name];
     if (defaultS) {
       return defaultS;
     }
@@ -4004,10 +4246,10 @@ function getStyle(
     if (parents.length === 0) {
       return '';
     }
-    return getStyle(name, styleProps, parents[0], parents.slice(1));
+    return getStyle(name, parents[0], parents.slice(1));
   }
   if (element.style[name] === 'initial') {
-    return getDefaultStyle(element, styleProps)[name];
+    return defaultStyles[element.tagName.toLowerCase()]?.[name];
   }
   return element.style[name];
 }
@@ -4016,33 +4258,21 @@ function getTextStylesFromElement(
   element: HTMLElement,
   parents: HTMLElement[],
 ): TextStyle {
-  const styleProps = [
-    'fontWeight',
-    'fontStyle',
-    'textDecorationLine',
-    'verticalAlign',
-  ] as const;
-
-  const fontWeight = getStyle('fontWeight', styleProps, element, parents);
-  const fontStyle = getStyle('fontStyle', styleProps, element, parents);
-  const textDecorationLine = getStyle(
-    'textDecorationLine',
-    styleProps,
-    element,
-    parents,
-  );
-  const verticalAlign = getStyle('verticalAlign', styleProps, element, parents);
+  const fontWeight = getStyle('fontWeight', element, parents);
+  const fontStyle = getStyle('fontStyle', element, parents);
+  const textDecorationLine = getStyle('textDecorationLine', element, parents);
+  const verticalAlign = getStyle('verticalAlign', element, parents);
 
   return {
-    bold: Number(fontWeight) >= 700 ? true : undefined,
+    bold: Number(fontWeight) >= 600 ? true : undefined,
     italic:
       fontStyle === 'italic' || fontStyle === 'oblique' ? true : undefined,
     underline: textDecorationLine === 'underline' ? true : undefined,
     strikethrough: textDecorationLine === 'line-through' ? true : undefined,
     script:
-      verticalAlign === 'sup'
+      verticalAlign === 'super' || verticalAlign === 'text-top'
         ? TextScript.Superscript
-        : verticalAlign === 'sub'
+        : verticalAlign === 'sub' || verticalAlign === 'text-bottom'
         ? TextScript.Subscript
         : undefined,
     code: parents.some((el) => el.tagName.toLowerCase() === 'code')
@@ -4056,7 +4286,9 @@ function convertFromElToEditorValue(
   el: HTMLElement,
   makeId: () => string,
 ): EditorValue {
-  console.log('converting html', el);
+  if (document.body === el) {
+    console.log('converting html', el);
+  }
   const walker = document.createTreeWalker(
     el,
     NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
@@ -4074,9 +4306,12 @@ function convertFromElToEditorValue(
   function isBlock(node: Node) {
     return (
       node instanceof HTMLElement &&
-      ['block', 'flex', 'grid', 'list-item', 'table'].includes(
-        getStyle('display', ['display'], node, []),
-      )
+      (
+        ['block', 'flex', 'grid', 'list-item', 'table'] as (
+          | string
+          | undefined
+        )[]
+      ).includes(getStyle('display', node, []))
     );
   }
   function getBlockParent(node: Node): HTMLElement | null {
