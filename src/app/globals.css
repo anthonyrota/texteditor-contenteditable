@@ -241,7 +241,7 @@ i {
 }
 
 .markdown-body *::selection {
-  background-color: #accef7;
+  background-color: rgba(172, 206, 247, 0.99);
   color: inherit;
 }
 
@@ -906,7 +906,7 @@ i {
 }
 
 .markdown-body table td.selected {
-  background-color: #accef7;
+  background-color: rgb(172, 206, 247);
 }
 
 .markdown-body table tr {
@@ -921,6 +921,7 @@ i {
   background-color: #f6f8fa;
 }
 
+.markdown-body table td.not-selected::selection,
 .markdown-body table td.not-selected *::selection {
   background-color: transparent;
 }

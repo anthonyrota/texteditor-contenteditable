@@ -1516,16 +1516,6 @@ function fixSelection(value: EditorValue, selection: Selection): Selection {
         (block) => block.id === selection.start.blockId,
       )!;
       if (block.type === BlockNodeType.Table) {
-        console.log({
-          type: SelectionType.Table,
-          editorId: subValue.id,
-          tableId: block.id,
-          startCell: { rowIndex: 0, columnIndex: 0 },
-          endCell: {
-            rowIndex: block.rows.length - 1,
-            columnIndex: block.numColumns - 1,
-          },
-        });
         return {
           stop: true,
           data: {
@@ -4627,7 +4617,7 @@ function ReactEditor({
         return;
       }
       const originalSelection = command.selection;
-      const inputSelection = mapSelectionFns.reduce(
+      let inputSelection = mapSelectionFns.reduce(
         (selection, mapSelection) => mapSelection(selection, true),
         originalSelection,
       );
@@ -4817,8 +4807,7 @@ function ReactEditor({
           case 'formatUnderline':
           case 'formatStrikeThrough':
           case 'formatSuperscript':
-          case 'formatSubscript':
-          case 'formatRemove': {
+          case 'formatSubscript': {
             cmds[
               (
                 {
@@ -4828,7 +4817,6 @@ function ReactEditor({
                   formatStrikeThrough: 'strikethrough',
                   formatSuperscript: 'superscript',
                   formatSubscript: 'subscript',
-                  formatRemove: 'clear format',
                 } as const
               )[inputType]
             ]
@@ -4926,19 +4914,6 @@ function ReactEditor({
           {},
           PushStateAction.Unique,
         );
-        if (
-          command.origin === 'clear format shortcut' &&
-          i !== null &&
-          i + 1 < queue.length
-        ) {
-          const next = queue[i + 1];
-          if (
-            next.type === CommandType.Input &&
-            next.inputType === 'formatRemove'
-          ) {
-            ignoreNext = true;
-          }
-        }
       } else if (command.type === CommandType.Undo) {
         if (newEditorCtrl.undos.length === 0) {
           return;
@@ -5081,30 +5056,50 @@ function ReactEditor({
 
   const onBeforeInput = (event: InputEvent): void => {
     event.preventDefault();
-    const [targetRange] = event.getTargetRanges();
     const curNativeSelection = window.getSelection();
-    let isBackwards = false;
-    if (curNativeSelection) {
-      const curNativeRange = curNativeSelection.getRangeAt(0);
-      if (
-        curNativeRange.startContainer === targetRange.startContainer &&
-        curNativeRange.endContainer === targetRange.endContainer &&
-        curNativeRange.startOffset === targetRange.startOffset &&
-        curNativeRange.endOffset === targetRange.endOffset
-      ) {
-        isBackwards = isSelectionBackwards(curNativeSelection);
-      }
-    }
+    const targetRange =
+      event.getTargetRanges()[0] || curNativeSelection?.getRangeAt(0);
     let selection: Selection;
     try {
-      selection = findSelection(
-        editorCtrl.current.value,
-        targetRange,
-        isBackwards,
-      );
+      selection = findSelection(editorCtrl.current.value, targetRange, false);
     } catch (error) {
-      console.error(error);
+      console.error('error finding selection', error);
       return;
+    }
+    if (curNativeSelection) {
+      const nativeSelection = findSelection(
+        editorCtrl.current.value,
+        curNativeSelection!.getRangeAt(0),
+        isSelectionBackwards(curNativeSelection!),
+      );
+      if (
+        (nativeSelection.editorId === selection.editorId &&
+          nativeSelection.type === SelectionType.Table &&
+          selection.type === SelectionType.Table &&
+          nativeSelection.tableId === selection.tableId &&
+          nativeSelection.startCell.rowIndex === selection.endCell.rowIndex &&
+          nativeSelection.startCell.columnIndex ===
+            selection.endCell.columnIndex &&
+          nativeSelection.endCell.rowIndex === selection.startCell.rowIndex &&
+          nativeSelection.endCell.columnIndex ===
+            selection.startCell.columnIndex) ||
+        (nativeSelection.type === SelectionType.Block &&
+          selection.type === SelectionType.Block &&
+          nativeSelection.start.blockId === selection.end.blockId &&
+          ((nativeSelection.start.type === BlockSelectionPointType.OtherBlock &&
+            selection.end.type === BlockSelectionPointType.OtherBlock) ||
+            (nativeSelection.start.type === BlockSelectionPointType.Paragraph &&
+              selection.end.type === BlockSelectionPointType.Paragraph &&
+              nativeSelection.start.offset === selection.end.offset)) &&
+          nativeSelection.end.blockId === selection.start.blockId &&
+          ((nativeSelection.end.type === BlockSelectionPointType.OtherBlock &&
+            selection.start.type === BlockSelectionPointType.OtherBlock) ||
+            (nativeSelection.end.type === BlockSelectionPointType.Paragraph &&
+              selection.start.type === BlockSelectionPointType.Paragraph &&
+              nativeSelection.end.offset === selection.start.offset)))
+      ) {
+        selection = nativeSelection;
+      }
     }
     let data: EditorDataTransfer | undefined;
     function mapValue(value: EditorValue): EditorValue {
@@ -5211,7 +5206,6 @@ function ReactEditor({
               'strikethrough shortcut',
               'superscript shortcut',
               'subscript shortcut',
-              'remove shortcut',
             ] as (string | undefined)[]
           ).includes(command.origin)) ||
         (cmd.type === CommandType.Input && cmd.inputType === 'deleteByDrag')
