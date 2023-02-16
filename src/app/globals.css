@@ -388,6 +388,10 @@ td:before {
   margin-bottom: 10px;
 }
 
+.editor .code-block {
+  margin-bottom: 1em;
+}
+
 .editor blockquote {
   margin: 0;
   padding: 0 1em;

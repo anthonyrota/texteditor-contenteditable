@@ -15,6 +15,8 @@ import { Tooltip } from '@/Tooltip';
 import { createDraft, finishDraft } from 'immer';
 import { WritableDraft } from 'immer/dist/internal';
 import { flushSync } from 'react-dom';
+import MonacoEditor, { loader } from '@monaco-editor/react';
+import monacoTheme from './monacoTheme.json';
 
 const roboto = Roboto({
   weight: ['400', '700'],
@@ -31,6 +33,7 @@ enum EditorFamilyType {
 enum BlockNodeType {
   Table = 'Block/Table',
   Image = 'Block/Image',
+  Code = 'Block/Code',
   Paragraph = 'Block/Paragraph',
 }
 
@@ -105,6 +108,14 @@ interface ImageNode {
   id: string;
 }
 
+interface CodeBlockNode {
+  type: BlockNodeType.Code;
+  isBlock: true;
+  code: string;
+  language?: string;
+  id: string;
+}
+
 enum ParagraphStyleType {
   Default = 'Default',
   Heading2 = 'Heading 2',
@@ -122,10 +133,6 @@ enum TextAlign {
   Justify = 'Justify',
 }
 
-enum IndentType {
-  FirstLine,
-  AllLines,
-}
 const MAX_INDENT = 8;
 interface ParagraphStyleBase {
   align?: TextAlign;
@@ -201,7 +208,7 @@ interface TextNode {
   id: string;
 }
 
-type BlockNode = ImageNode | TableNode | ParagraphNode;
+type BlockNode = ImageNode | TableNode | CodeBlockNode | ParagraphNode;
 type InlineNode = TextNode;
 
 enum PushStateAction {
@@ -217,7 +224,7 @@ interface EditorController {
   selection: Selection | null;
   undos: EditorController[];
   redos: EditorController[];
-  lastAction: PushStateAction;
+  lastAction: PushStateAction | string;
   makeId(): string;
 }
 
@@ -320,6 +327,20 @@ function makeNumberedListParagraph(
   );
 }
 
+function makeCodeBlock(
+  code: string,
+  language: string | undefined,
+  id: string,
+): CodeBlockNode {
+  return {
+    type: BlockNodeType.Code,
+    isBlock: true,
+    code,
+    language,
+    id,
+  };
+}
+
 function makeTable(
   rows: TableRow[],
   numColumns: number,
@@ -381,10 +402,12 @@ function makeEditorValue(blocks: BlockNode[], id: string): EditorValue {
 
 interface ReactTableNodeProps {
   value: TableNode;
+  queueCommand: (cmd: Command) => void;
 }
 function ReactTableNode_({
   value,
   selectedCells,
+  queueCommand,
 }: ReactTableNodeProps & { selectedCells: string[] }): JSX.Element {
   return (
     <div className="table-div">
@@ -409,7 +432,10 @@ function ReactTableNode_({
                           : undefined
                       }
                     >
-                      <ReactEditorValue value={cell.value} isTable />
+                      <ReactEditorValue
+                        value={cell.value}
+                        queueCommand={queueCommand}
+                      />
                     </td>
                   );
                 })}
@@ -428,7 +454,10 @@ const ReactTableNode_m = memo(ReactTableNode_, (a, b) => {
     a.selectedCells.every((id, i) => b.selectedCells[i] === id)
   );
 });
-function ReactTableNode({ value }: ReactTableNodeProps): JSX.Element {
+function ReactTableNode({
+  value,
+  queueCommand,
+}: ReactTableNodeProps): JSX.Element {
   const selectedEditors = useContext(SelectedEditorsContext);
   const selectedCells = useMemo(() => {
     let selectedCells: string[] = [];
@@ -443,7 +472,13 @@ function ReactTableNode({ value }: ReactTableNodeProps): JSX.Element {
   }, [value, selectedEditors]);
   if (selectedEditors.length !== 0) {
   }
-  return <ReactTableNode_m value={value} selectedCells={selectedCells} />;
+  return (
+    <ReactTableNode_m
+      value={value}
+      queueCommand={queueCommand}
+      selectedCells={selectedCells}
+    />
+  );
 }
 
 function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
@@ -460,8 +495,124 @@ function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
 }
 const ReactBlockImageNode = memo(ReactBlockImageNode_);
 
+function ReactCodeBlockNode({
+  value,
+  editorId,
+  queueCommand,
+}: {
+  value: CodeBlockNode;
+  editorId: string;
+  queueCommand: (cmd: Command) => void;
+}): JSX.Element {
+  let editorRef =
+    useRef<
+      import('monaco-editor/esm/vs/editor/editor.api.js').editor.IStandaloneCodeEditor
+    >();
+  const [height, setHeight] = useState(0);
+  const callback = useRef<any>();
+  callback.current = (code: string) => {
+    console.log({ code, valueCode: value.code });
+    if (code === value.code) {
+      return;
+    }
+    queueCommand({
+      type: CommandType.Input,
+      selection: {
+        type: SelectionType.Block,
+        editorId,
+        start: {
+          type: BlockSelectionPointType.OtherBlock,
+          blockId: value.id,
+        },
+        end: {
+          type: BlockSelectionPointType.OtherBlock,
+          blockId: value.id,
+        },
+      },
+      inputType: 'x_ReplaceBlock_MergeHistory',
+      data: {
+        type: DataTransferType.Rich,
+        value: makeEditorValue(
+          [makeCodeBlock(code || '', value.language, value.id)],
+          '',
+        ),
+      },
+    });
+  };
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  return (
+    <div
+      className="code-block"
+      contentEditable={false}
+      data-family={EditorFamilyType.Block}
+      data-type={BlockNodeType.Code}
+      data-id={value.id}
+    >
+      {isClient && (
+        <MonacoEditor
+          language={value.language || 'typescript'}
+          value={value.code}
+          height={height}
+          options={{
+            scrollBeyondLastLine: false,
+            wordWrap: 'on',
+            wrappingStrategy: 'advanced',
+            minimap: {
+              enabled: false,
+            },
+            overviewRulerLanes: 0,
+            renderWhitespace: 'none',
+            guides: {
+              indentation: false,
+            },
+          }}
+          theme={'my-theme'}
+          onMount={(editor) => {
+            editorRef.current = editor;
+            setHeight(editor.getContentHeight());
+            editor.onDidContentSizeChange(() => {
+              const contentHeight = editor.getContentHeight();
+              setHeight(contentHeight);
+            });
+          }}
+          onChange={(code) => callback.current(code)}
+        />
+      )}
+    </div>
+  );
+}
+
+if (typeof window !== 'undefined') {
+  loader.init().then((monaco) => {
+    monaco.editor.defineTheme('my-theme', monacoTheme as any);
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+      target: monaco.languages.typescript.ScriptTarget.Latest,
+      allowNonTsExtensions: true,
+      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+      module: monaco.languages.typescript.ModuleKind.CommonJS,
+      noEmit: true,
+      esModuleInterop: true,
+      jsx: monaco.languages.typescript.JsxEmit.React,
+      reactNamespace: 'React',
+      allowJs: true,
+      typeRoots: ['node_modules/@types'],
+    });
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: true,
+    });
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(
+      '<<react-definition-file>>',
+      `file:///node_modules/@react/types/index.d.ts`,
+    );
+  });
+}
+
 function ReactParagraphNode_(
-  props: (
+  props:
     | {
         value: ParagraphNode & {
           style: Exclude<ParagraphStyle, NumberedListParagraphStyle>;
@@ -472,12 +623,9 @@ function ReactParagraphNode_(
           style: NumberedListParagraphStyle;
         };
         listIndex: number;
-      }
-  ) & {
-    isTable: boolean;
-  },
+      },
 ): JSX.Element {
-  const { value, isTable } = props;
+  const { value } = props;
   const isEmpty =
     value.children.length === 1 &&
     !value.children[0].isBlock &&
@@ -488,10 +636,6 @@ function ReactParagraphNode_(
   } else {
     children = [];
     let i = 0;
-    const isHeading =
-      value.style.type === ParagraphStyleType.Heading1 ||
-      value.style.type === ParagraphStyleType.Heading2 ||
-      value.style.type === ParagraphStyleType.Heading3;
     groupArr(
       value.children,
       (inline) => {
@@ -519,22 +663,13 @@ function ReactParagraphNode_(
               return (
                 <ReactTextNode
                   value={inline}
-                  isTable={isTable}
-                  isHeading={isHeading}
                   isFirstCode={isFirst}
                   isLastCode={isLast}
                   key={inline.id}
                 />
               );
             }
-            return (
-              <ReactTextNode
-                value={inline}
-                isTable={isTable}
-                isHeading={isHeading}
-                key={inline.id}
-              />
-            );
+            return <ReactTextNode value={inline} key={inline.id} />;
           }
         }
       });
@@ -660,14 +795,10 @@ const ReactParagraphNode = memo(ReactParagraphNode_);
 
 function ReactTextNode({
   value,
-  isTable,
-  isHeading,
   isFirstCode,
   isLastCode,
 }: {
   value: TextNode;
-  isTable: boolean;
-  isHeading: boolean;
   isFirstCode?: boolean;
   isLastCode?: boolean;
 }): JSX.Element {
@@ -736,33 +867,7 @@ function ReactTextNode({
       </span>
     );
   }
-  // const splitEvery = isHeading ? 16 : 32;
-  // if (isTable && value.text.split(' ').some((seg) => seg.length > splitEvery)) {
-  //   let children: JSX.Element[] = [];
-  //   const splitByRe = value.text.split(/(?=[^\w])|\b/g);
-  //   const split: string[] = [];
-  //   const addText = (text: string): void => {
-  //     if (text.length <= splitEvery) {
-  //       split.push(text);
-  //       return;
-  //     }
-  //     split.push(text.slice(0, splitEvery));
-  //     addText(text.slice(splitEvery));
-  //   };
-  //   splitByRe.forEach(addText);
-  //   children = [renderText(split[0], true, split.length === 1, 0)];
-  //   let start = split[0].length;
-  //   for (let i = 1; i < split.length; i++) {
-  //     const text = split[i];
-  //     children.push(<wbr key={i * 2} />);
-  //     children.push(
-  //       renderText(text, false, i === split.length - 1, i * 2 + 1, start),
-  //     );
-  //     start += text.length;
-  //   }
-  //   return <>{children}</>;
-  // }
-  return renderText(value.text);
+  return renderText(value.text, true, true);
 }
 
 function groupArr<T, G>(
@@ -787,12 +892,12 @@ function groupArr<T, G>(
 
 interface ReactEditorValueProps {
   value: EditorValue;
-  isTable: boolean;
+  queueCommand: (cmd: Command) => void;
 }
 function ReactEditorValue_({
   value,
-  isTable,
   listBlockIdToIdx,
+  queueCommand,
 }: ReactEditorValueProps & {
   listBlockIdToIdx: Record<string, number>;
 }): JSX.Element {
@@ -835,7 +940,6 @@ function ReactEditorValue_({
                   style: NumberedListParagraphStyle;
                 }
               }
-              isTable={isTable}
               listIndex={listBlockIdToIdx[block.id]}
               key={block.id}
             />
@@ -848,7 +952,6 @@ function ReactEditorValue_({
                 style: BulletListParagraphStyle;
               }
             }
-            isTable={isTable}
             key={block.id}
           />
         );
@@ -882,7 +985,24 @@ function ReactEditorValue_({
           break;
         }
         case BlockNodeType.Table: {
-          children.push(<ReactTableNode value={block} key={block.id} />);
+          children.push(
+            <ReactTableNode
+              value={block}
+              queueCommand={queueCommand}
+              key={block.id}
+            />,
+          );
+          break;
+        }
+        case BlockNodeType.Code: {
+          children.push(
+            <ReactCodeBlockNode
+              value={block}
+              editorId={value.id}
+              queueCommand={queueCommand}
+              key={block.id}
+            />,
+          );
           break;
         }
         case BlockNodeType.Paragraph: {
@@ -893,7 +1013,6 @@ function ReactEditorValue_({
                   style: Exclude<ParagraphStyle, NumberedListParagraphStyle>;
                 }
               }
-              isTable={isTable}
               key={block.id}
             />,
           );
@@ -911,13 +1030,13 @@ function ReactEditorValue_({
 const ReactEditorValue_m = memo(ReactEditorValue_);
 function ReactEditorValue({
   value,
-  isTable,
+  queueCommand,
 }: ReactEditorValueProps): JSX.Element {
   const listBlockIdToIdx = useContext(NumberedListIndicesContext);
   return (
     <ReactEditorValue_m
       value={value}
-      isTable={isTable}
+      queueCommand={queueCommand}
       listBlockIdToIdx={listBlockIdToIdx}
     />
   );
@@ -2393,6 +2512,7 @@ function insertSelection(
     editorCtrl,
     selectionToInsert,
   );
+  console.log(value, newValue);
   const selection = mapSelectionFromRemove(selectionToInsert, true);
   switch (selection.type) {
     case SelectionType.Block: {
@@ -3350,9 +3470,10 @@ function mapInlineStyleIfActive<T>(
   }
   let styles: TextStyle[] = [];
   return !anyTextMatches(extractSelection(value, selection), (text) => {
+    console.log(text);
     styles.push(text.style);
     return !condition(text.style);
-  })
+  }) && styles.length > 0
     ? getStyle(styles)
     : undefined;
 }
@@ -3690,19 +3811,21 @@ function scrollIntoView(
         range.startContainer as HTMLElement
       ).getBoundingClientRect();
     } else {
-      if (range.startOffset === 0) {
-        range.setEnd(range.endContainer, 1);
-      } else {
-        range.setStart(range.startContainer, range.startOffset - 1);
-      }
-
-      cursorRect = range.getBoundingClientRect();
-
-      if (cursorRect.top === 0 && cursorRect.height === 0) {
-        if (range.getClientRects().length) {
-          cursorRect = range.getClientRects()[0];
+      try {
+        if (range.startOffset === 0) {
+          range.setEnd(range.endContainer, 1);
+        } else {
+          range.setStart(range.startContainer, range.startOffset - 1);
         }
-      }
+
+        cursorRect = range.getBoundingClientRect();
+
+        if (cursorRect.top === 0 && cursorRect.height === 0) {
+          if (range.getClientRects().length) {
+            cursorRect = range.getClientRects()[0];
+          }
+        }
+      } catch (error) {}
     }
   }
 
@@ -3799,6 +3922,7 @@ enum CommandType {
   InlineFormat,
   BlockFormat,
   ClearFormat,
+  ReplaceBlock,
   Undo,
   Redo,
   DeleteBackwardKey,
@@ -4694,7 +4818,10 @@ function convertFromElToEditorValue(
     NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
     {
       acceptNode(node) {
-        if (node.parentNode!.nodeName.toLowerCase() === 'table') {
+        if (
+          node.parentNode!.nodeName.toLowerCase() === 'table' ||
+          node.parentNode!.nodeName.toLowerCase() === 'pre'
+        ) {
           return NodeFilter.FILTER_REJECT;
         }
         if (
@@ -4876,8 +5003,10 @@ function convertFromElToEditorValue(
             makeId(),
           ),
         );
-        prevBlockParent = null;
-      } else if (blockEl.tagName.toLowerCase() === 'table') {
+        prevBlockParent = undefined;
+        continue;
+      }
+      if (blockEl.tagName.toLowerCase() === 'table') {
         const rows: TableRow[] = [];
         let maxCols = 0;
         for (let i = 0; i < blockEl.childNodes.length; i++) {
@@ -4927,8 +5056,12 @@ function convertFromElToEditorValue(
           continue;
         }
         blocks.push(makeTable(rows, maxCols, makeId()));
-        prevBlockParent = null;
+        prevBlockParent = undefined;
         continue;
+      }
+      if (blockEl.tagName.toLowerCase() === 'pre') {
+        const code = blockEl.textContent!;
+        blocks.push(makeCodeBlock(code, undefined, makeId()));
       }
       prevBlockParent = undefined;
       continue;
@@ -5039,9 +5172,9 @@ function ReactEditor({
   function pushState(
     curEditorCtrl: EditorController,
     newValue: EditorValue,
-    newSelection: Selection,
+    newSelection: Selection | null,
     newTextStyle: TextStyle,
-    action: PushStateAction,
+    action: PushStateAction | string,
     merge = false,
   ): EditorController {
     let undos = curEditorCtrl.undos;
@@ -5143,8 +5276,9 @@ function ReactEditor({
           case 'insertReplacementText':
           case 'insertText':
           case 'insertFromPaste':
-          case 'insertFromDrop': {
-            let action: PushStateAction;
+          case 'insertFromDrop':
+          case 'x_ReplaceBlock_MergeHistory': {
+            let action: PushStateAction | string;
             if (
               inputType === 'insertReplacementText' ||
               inputType === 'insertFromYank' ||
@@ -5155,6 +5289,10 @@ function ReactEditor({
                 data.text.includes('\n'))
             ) {
               action = PushStateAction.Unique;
+            } else if (inputType === 'x_ReplaceBlock_MergeHistory') {
+              action = `x_ReplaceBlock_MergeHistory_${
+                (data as RichDataTransfer).value.blocks[0].id
+              }`;
             } else {
               action = PushStateAction.Insert;
             }
@@ -5194,10 +5332,11 @@ function ReactEditor({
             const newValue = edit.value;
             const newSelection = edit.mapSelection(inputSelection, true);
             const newTextStyle = getSelectionTextStyle(newValue, newSelection);
+            console.log('new editor', newEditorCtrl);
             newEditorCtrl = pushState(
               newEditorCtrl,
               newValue,
-              newSelection,
+              inputType === 'x_ReplaceBlock_MergeHistory' ? null : newSelection,
               newTextStyle,
               action,
               mergeHistory,
@@ -5389,6 +5528,7 @@ function ReactEditor({
         if (newEditorCtrl.undos.length === 0) {
           return;
         }
+        console.log('undoing');
         const end = newEditorCtrl.undos[newEditorCtrl.undos.length - 1];
         newEditorCtrl = {
           value: end.value,
@@ -5399,6 +5539,7 @@ function ReactEditor({
           lastAction: PushStateAction.Unique,
           makeId,
         };
+        console.log(newEditorCtrl);
       } else if (command.type === CommandType.Redo) {
         if (newEditorCtrl.redos.length === 0) {
           return;
@@ -5598,6 +5739,9 @@ function ReactEditor({
   }
 
   const onBeforeInput = (event: InputEvent): void => {
+    if (document.activeElement !== editorRef.current) {
+      return;
+    }
     event.preventDefault();
     const curNativeSelection = window.getSelection();
     const targetRange =
@@ -5787,16 +5931,27 @@ function ReactEditor({
       return;
     }
 
-    const { activeElement } = window.document;
-
-    if (activeElement !== editorRef.current) {
-      return;
-    }
-
     const nativeSelection = window.getSelection()!;
-    if (nativeSelection.rangeCount === 0) {
+
+    if (
+      document.activeElement !== editorRef.current ||
+      nativeSelection.rangeCount === 0
+    ) {
+      if (editorCtrl.current.selection) {
+        editorCtrl.current = pushState(
+          editorCtrl.current,
+          editorCtrl.current.value,
+          null,
+          {},
+          PushStateAction.Selection,
+        );
+        flushSync(() => {
+          setRenderToggle((t) => !t);
+        });
+      }
       return;
     }
+
     const curSelection = findSelection(
       editorCtrl.current.value,
       nativeSelection.getRangeAt(0),
@@ -5836,7 +5991,12 @@ function ReactEditor({
                   <NumberedListIndicesContext.Provider
                     value={getListBlockIdToIdx(value)}
                   >
-                    <ReactEditorValue isTable={false} value={curValue} />
+                    <ReactEditorValue
+                      queueCommand={() => {
+                        throw new Error('Command queued in copy');
+                      }}
+                      value={curValue}
+                    />
                   </NumberedListIndicesContext.Provider>
                 </>,
               ),
@@ -5852,7 +6012,7 @@ function ReactEditor({
 
   const onCopy = (event: ClipboardEvent): void => {
     const nativeSelection = window.getSelection();
-    if (!nativeSelection) {
+    if (!nativeSelection || document.activeElement !== editorRef.current) {
       return;
     }
     const curSelection = findSelection(
@@ -5860,20 +6020,33 @@ function ReactEditor({
       nativeSelection.getRangeAt(0),
       isSelectionBackwards(nativeSelection),
     );
-    copySelection(editorCtrl.current.value, curSelection);
+    if (!isCollapsed(curSelection)) {
+      copySelection(editorCtrl.current.value, curSelection);
+    }
     event.preventDefault();
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
-    if (!editorCtrl.current.selection) {
+    const curSelection = window.getSelection();
+    if (!curSelection || document.activeElement !== editorRef.current) {
       return;
     }
     const cmdKV = Object.entries(cmds);
     for (let i = 0; i < cmdKV.length; i++) {
       const [_name, cmd] = cmdKV[i];
       if (cmd.isKey(event)) {
+        if (cmd !== cmds['delete backward']) {
+          event.preventDefault();
+        }
         cmd
-          .getCmds(editorCtrl.current.selection, editorCtrl.current.makeId)
+          .getCmds(
+            findSelection(
+              editorCtrl.current.value,
+              curSelection.getRangeAt(0),
+              isSelectionBackwards(curSelection),
+            ),
+            editorCtrl.current.makeId,
+          )
           .forEach((command) => {
             queueCommand(command);
           });
@@ -6140,7 +6313,7 @@ function ReactEditor({
         <SelectedEditorsContext.Provider value={selectedEditors}>
           <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
             <ReactEditorValue
-              isTable={false}
+              queueCommand={queueCommand}
               value={editorCtrl.current.value}
             />
           </NumberedListIndicesContext.Provider>
@@ -6388,13 +6561,13 @@ export default function Home() {
   }
 
   // prettier-ignore
-  const initialValue = makeEditorValue([makeHeading1Paragraph([makeDefaultText("This is the title",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id()),],id()),id()),],id()),],2,id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id())],id()),id()),],id()),],2,id()),makeNumberedListParagraph([makeDefaultText("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",id()),],id(),id()),makeDefaultParagraph([makeDefaultText("",id())],id()),makeDefaultParagraph([makeDefaultText("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",id()),],id())],id())
+  const initialValue = {blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"JavaScript basics",style:{},id:"1613"}],style:{type:"Heading 1"},id:"1612"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"JavaScript is a programming language that adds interactivity to your website. This happens in games, in the behavior of responses when buttons are pressed or with data entry on forms; with dynamic styling; with animation, etc. This article helps you get started with JavaScript and furthers your understanding of what is possible.",style:{},id:"1615"}],style:{type:"Default"},id:"1614"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"What is JavaScript?",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#what_is_javascript"}},id:"1617"}],style:{type:"Heading 2"},id:"1616"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"JavaScript",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/JavaScript"}},id:"1619"},{type:"Inline/Text",isBlock:!1,text:"\xa0is a powerful programming language that can add interactivity to a website. It was invented by Brendan Eich.",style:{},id:"1620"}],style:{type:"Default"},id:"1618"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"JavaScript is versatile and beginner-friendly. With more experience, you'll be able to create games, animated 2D and 3D graphics, comprehensive database-driven apps, and much more!",style:{},id:"1623"}],style:{type:"Default"},id:"1622"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"JavaScript itself is relatively compact, yet very flexible. Developers have written a variety of tools on top of the core JavaScript language, unlocking a vast amount of functionality with minimum effort. These include:",style:{},id:"1625"}],style:{type:"Default"},id:"1624"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Browser Application Programming Interfaces (",style:{},id:"1628"},{type:"Inline/Text",isBlock:!1,text:"APIs",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/API"}},id:"1629"},{type:"Inline/Text",isBlock:!1,text:") built into web browsers, providing functionality such as dynamically creating HTML and setting CSS styles; collecting and manipulating a video stream from a user's webcam, or generating 3D graphics and audio samples.",style:{},id:"1630"}],style:{type:"Bullet List",listId:"1626"},id:"1627"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Third-party APIs that allow developers to incorporate functionality in sites from other content providers, such as Twitter or Facebook.",style:{},id:"1632"}],style:{type:"Bullet List",listId:"1626"},id:"1631"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Third-party frameworks and libraries that you can apply to HTML to accelerate the work of building sites and applications.",style:{},id:"1634"}],style:{type:"Bullet List",listId:"1626"},id:"1633"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"It's outside the scope of this article—as a light introduction to JavaScript—to present the details of how the core JavaScript language is different from the tools listed above. You can learn more in MDN's\xa0",style:{},id:"1636"},{type:"Inline/Text",isBlock:!1,text:"JavaScript learning area",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/JavaScript"}},id:"1638"},{type:"Inline/Text",isBlock:!1,text:", as well as in other parts of MDN.",style:{},id:"1639"}],style:{type:"Default"},id:"1635"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"The section below introduces some aspects of the core language and offers an opportunity to play with a few browser API features too. Have fun!",style:{},id:"1641"}],style:{type:"Default"},id:"1640"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:'A "Hello world!" example',style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#a_hello_world!_example"}},id:"1643"}],style:{type:"Heading 2"},id:"1642"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"JavaScript is one of the most popular modern web technologies! As your JavaScript skills grow, your websites will enter a new dimension of power and creativity.",style:{},id:"1645"}],style:{type:"Default"},id:"1644"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"However, getting comfortable with JavaScript is more challenging than getting comfortable with HTML and CSS. You may have to start small, and progress gradually. To begin, let's examine how to add JavaScript to your page for creating a\xa0",style:{},id:"1647"},{type:"Inline/Text",isBlock:!1,text:"Hello world!",style:{italic:!0},id:"1649"},{type:"Inline/Text",isBlock:!1,text:"\xa0example. (",style:{},id:"1650"},{type:"Inline/Text",isBlock:!1,text:"Hello world!",style:{italic:!0},id:"1652"},{type:"Inline/Text",isBlock:!1,text:"\xa0is\xa0",style:{},id:"1653"},{type:"Inline/Text",isBlock:!1,text:"the standard for introductory programming examples",style:{underline:!0,link:{href:"https://en.wikipedia.org/wiki/%22Hello,_World!%22_program"}},id:"1656"},{type:"Inline/Text",isBlock:!1,text:".)",style:{},id:"1657"}],style:{type:"Default"},id:"1646"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Warning:\xa0If you haven't been following along with the rest of our course,\xa0",style:{},id:"1659"},{type:"Inline/Text",isBlock:!1,text:"download this example code",style:{underline:!0,link:{href:"https://codeload.github.com/mdn/beginner-html-site-styled/zip/refs/heads/gh-pages"}},id:"1663"},{type:"Inline/Text",isBlock:!1,text:"\xa0and use it as a starting point.",style:{},id:"1664"}],style:{type:"Default"},id:"1658"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Go to your test site and create a new folder named\xa0",style:{},id:"1668"},{type:"Inline/Text",isBlock:!1,text:"scripts",style:{code:!0},id:"1670"},{type:"Inline/Text",isBlock:!1,text:". Within the scripts folder, create a new text document called\xa0",style:{},id:"1671"},{type:"Inline/Text",isBlock:!1,text:"main.js",style:{code:!0},id:"1673"},{type:"Inline/Text",isBlock:!1,text:", and save it.",style:{},id:"1674"}],style:{type:"Numbered List",listId:"1666"},id:"1667"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"In your\xa0",style:{},id:"1676"},{type:"Inline/Text",isBlock:!1,text:"index.html",style:{code:!0},id:"1678"},{type:"Inline/Text",isBlock:!1,text:"\xa0file, enter this code on a new line, just before the closing\xa0",style:{},id:"1679"},{type:"Inline/Text",isBlock:!1,text:"</body>",style:{code:!0},id:"1682"},{type:"Inline/Text",isBlock:!1,text:"\xa0tag:",style:{},id:"1683"}],style:{type:"Numbered List",listId:"1666"},id:"1675"},{type:"Block/Code",isBlock:!0,code:'<script src="scripts/main.js"></script>\n',id:"1685"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This is doing the same job as the\xa0",style:{},id:"1687"},{type:"Inline/Text",isBlock:!1,text:"<link>",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/HTML/Element/link"}},id:"1689"},{type:"Inline/Text",isBlock:!1,text:"\xa0element for CSS. It applies the JavaScript to the page, so it can have an effect on the HTML (along with the CSS, and anything else on the page).",style:{},id:"1690"}],style:{type:"Numbered List",listId:"1666"},id:"1686"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Add this code to the\xa0",style:{},id:"1693"},{type:"Inline/Text",isBlock:!1,text:"main.js",style:{code:!0},id:"1695"},{type:"Inline/Text",isBlock:!1,text:"\xa0file:",style:{},id:"1696"}],style:{type:"Numbered List",listId:"1666"},id:"1692"},{type:"Block/Code",isBlock:!0,code:'const myHeading = document.querySelector("h1");\nmyHeading.textContent = "Hello world!";\n',id:"1698"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Make sure the HTML and JavaScript files are saved. Then load\xa0",style:{},id:"1700"},{type:"Inline/Text",isBlock:!1,text:"index.html",style:{code:!0},id:"1702"},{type:"Inline/Text",isBlock:!1,text:"\xa0in your browser. You should see something like this:",style:{},id:"1703"}],style:{type:"Numbered List",listId:"1666"},id:"1699"},{type:"Block/Image",isBlock:!0,src:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics/hello-world.png",caption:'Heading "hello world" above a firefox logo',id:"1705"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Note:\xa0The reason the instructions (above) place the\xa0",style:{},id:"1707"},{type:"Inline/Text",isBlock:!1,text:"<script>",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script"}},id:"1711"},{type:"Inline/Text",isBlock:!1,text:"\xa0element near the bottom of the HTML file is that\xa0the browser reads code in the order it appears in the file.",style:{},id:"1712"}],style:{type:"Default"},id:"1706"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"If the JavaScript loads first and it is supposed to affect the HTML that hasn't loaded yet, there could be problems. Placing JavaScript near the bottom of an HTML page is one way to accommodate this dependency. To learn more about alternative approaches, see\xa0",style:{},id:"1718"},{type:"Inline/Text",isBlock:!1,text:"Script loading strategies",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/JavaScript/First_steps/What_is_JavaScript#script_loading_strategies"}},id:"1720"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"1721"}],style:{type:"Default"},id:"1717"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"What happened?",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#what_happened"}},id:"1723"}],style:{type:"Heading 2"},id:"1722"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"The heading text changed to\xa0",style:{},id:"1725"},{type:"Inline/Text",isBlock:!1,text:"Hello world!",style:{italic:!0},id:"1727"},{type:"Inline/Text",isBlock:!1,text:"\xa0using JavaScript. You did this by using a function called\xa0",style:{},id:"1728"},{type:"Inline/Text",isBlock:!1,text:"querySelector()",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/API/Document/querySelector"}},id:"1731"},{type:"Inline/Text",isBlock:!1,text:"\xa0to grab a reference to your heading, and then store it in a variable called\xa0",style:{},id:"1732"},{type:"Inline/Text",isBlock:!1,text:"myHeading",style:{code:!0},id:"1735"},{type:"Inline/Text",isBlock:!1,text:". This is similar to what we did using CSS selectors. When you want to do something to an element, you need to select it first.",style:{},id:"1736"}],style:{type:"Default"},id:"1724"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Following that, the code set the value of the\xa0",style:{},id:"1738"},{type:"Inline/Text",isBlock:!1,text:"myHeading",style:{code:!0},id:"1740"},{type:"Inline/Text",isBlock:!1,text:"\xa0variable's\xa0",style:{},id:"1741"},{type:"Inline/Text",isBlock:!1,text:"textContent",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/API/Node/textContent"}},id:"1744"},{type:"Inline/Text",isBlock:!1,text:"\xa0property (which represents the content of the heading) to\xa0",style:{},id:"1745"},{type:"Inline/Text",isBlock:!1,text:"Hello world!",style:{italic:!0},id:"1748"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"1749"}],style:{type:"Default"},id:"1737"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Note:\xa0Both of the features you used in this exercise are parts of the\xa0",style:{},id:"1751"},{type:"Inline/Text",isBlock:!1,text:"Document Object Model (DOM) API",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model"}},id:"1755"},{type:"Inline/Text",isBlock:!1,text:", which has the capability to manipulate documents.",style:{},id:"1756"}],style:{type:"Default"},id:"1750"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Language basics crash course",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#language_basics_crash_course"}},id:"1758"}],style:{type:"Heading 2"},id:"1757"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"To give you a better understanding of how JavaScript works, let's explain some of the core features of the language. It's worth noting that these features are common to all programming languages. If you master these fundamentals, you have a head start on coding in other languages too!",style:{},id:"1760"}],style:{type:"Default"},id:"1759"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Warning:\xa0In this article, try entering the example code lines into your JavaScript console to see what happens. For more details on JavaScript consoles, see\xa0",style:{},id:"1762"},{type:"Inline/Text",isBlock:!1,text:"Discover browser developer tools",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Common_questions/Tools_and_setup/What_are_browser_developer_tools"}},id:"1766"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"1767"}],style:{type:"Default"},id:"1761"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Variables",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#variables"}},id:"1769"}],style:{type:"Heading 2"},id:"1768"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Variables",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/Variable"}},id:"1771"},{type:"Inline/Text",isBlock:!1,text:"\xa0are containers that store values. You start by declaring a variable with the\xa0",style:{},id:"1772"},{type:"Inline/Text",isBlock:!1,text:"let",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/let"}},id:"1775"},{type:"Inline/Text",isBlock:!1,text:"\xa0keyword, followed by the name you give to the variable:",style:{},id:"1776"}],style:{type:"Default"},id:"1770"},{type:"Block/Code",isBlock:!0,code:"let myVariable;\n",id:"1778"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"A semicolon at the end of a line indicates where a statement ends. It is only required when you need to separate statements on a single line. However, some people believe it's good practice to have semicolons at the end of each statement. There are other rules for when you should and shouldn't use semicolons. For more details, see\xa0",style:{},id:"1780"},{type:"Inline/Text",isBlock:!1,text:"Your Guide to Semicolons in JavaScript",style:{underline:!0,link:{href:"https://www.codecademy.com/resources/blog/your-guide-to-semicolons-in-javascript/"}},id:"1782"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"1783"}],style:{type:"Default"},id:"1779"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"You can name a variable nearly anything, but there are some restrictions. (See\xa0",style:{},id:"1785"},{type:"Inline/Text",isBlock:!1,text:"this section about naming rules",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types#variables"}},id:"1787"},{type:"Inline/Text",isBlock:!1,text:".) If you are unsure, you can\xa0",style:{},id:"1788"},{type:"Inline/Text",isBlock:!1,text:"check your variable name",style:{underline:!0,link:{href:"https://mothereff.in/js-variables"}},id:"1790"},{type:"Inline/Text",isBlock:!1,text:"\xa0to see if it's valid.",style:{},id:"1791"}],style:{type:"Default"},id:"1784"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"JavaScript is case sensitive. This means\xa0",style:{},id:"1794"},{type:"Inline/Text",isBlock:!1,text:"myVariable",style:{code:!0},id:"1796"},{type:"Inline/Text",isBlock:!1,text:"\xa0is not the same as\xa0",style:{},id:"1797"},{type:"Inline/Text",isBlock:!1,text:"myvariable",style:{code:!0},id:"1800"},{type:"Inline/Text",isBlock:!1,text:". If you have problems in your code, check the case!",style:{},id:"1801"}],style:{type:"Default"},id:"1793"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"After declaring a variable, you can give it a value:",style:{},id:"1803"}],style:{type:"Default"},id:"1802"},{type:"Block/Code",isBlock:!0,code:'myVariable = "Bob";\n',id:"1804"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Also, you can do both these operations on the same line:",style:{},id:"1806"}],style:{type:"Default"},id:"1805"},{type:"Block/Code",isBlock:!0,code:'let myVariable = "Bob";\n',id:"1807"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"You retrieve the value by calling the variable name:",style:{},id:"1809"}],style:{type:"Default"},id:"1808"},{type:"Block/Code",isBlock:!0,code:"myVariable;\n",id:"1810"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"After assigning a value to a variable, you can change it later in the code:",style:{},id:"1812"}],style:{type:"Default"},id:"1811"},{type:"Block/Code",isBlock:!0,code:'let myVariable = "Bob";\nmyVariable = "Steve";\n',id:"1813"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Note that variables may hold values that have different\xa0",style:{},id:"1815"},{type:"Inline/Text",isBlock:!1,text:"data types",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Data_structures"}},id:"1817"},{type:"Inline/Text",isBlock:!1,text:":",style:{},id:"1818"}],style:{type:"Default"},id:"1814"},{type:"Block/Table",isBlock:!0,rows:[{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Variable",style:{},id:"1820"}],style:{type:"Default",align:"Left"},id:"1819"}],id:"1821"},id:"1822"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Explanation",style:{},id:"1824"}],style:{type:"Default",align:"Left"},id:"1823"}],id:"1825"},id:"1826"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Example",style:{},id:"1828"}],style:{type:"Default",align:"Left"},id:"1827"}],id:"1829"},id:"1830"}],id:"1831"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"String",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/String"}},id:"1833"}],style:{type:"Default"},id:"1832"}],id:"1834"},id:"1835"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This is a sequence of text known as a string. To signify that the value is a string, enclose it in single or double quote marks.",style:{},id:"1837"}],style:{type:"Default"},id:"1836"}],id:"1838"},id:"1839"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"let myVariable = 'Bob';",style:{code:!0},id:"1841"},{type:"Inline/Text",isBlock:!1,text:"\xa0or",style:{},id:"1842"}],style:{type:"Default"},id:"1840"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:'let myVariable = "Bob";',style:{code:!0},id:"1846"}],style:{type:"Default"},id:"1844"}],id:"1847"},id:"1848"}],id:"1849"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Number",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/Number"}},id:"1851"}],style:{type:"Default"},id:"1850"}],id:"1852"},id:"1853"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This is a number. Numbers don't have quotes around them.",style:{},id:"1855"}],style:{type:"Default"},id:"1854"}],id:"1856"},id:"1857"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"let myVariable = 10;",style:{code:!0},id:"1859"}],style:{type:"Default"},id:"1858"}],id:"1860"},id:"1861"}],id:"1862"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Boolean",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/Boolean"}},id:"1864"}],style:{type:"Default"},id:"1863"}],id:"1865"},id:"1866"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This is a True/False value. The words\xa0",style:{},id:"1868"},{type:"Inline/Text",isBlock:!1,text:"true",style:{code:!0},id:"1870"},{type:"Inline/Text",isBlock:!1,text:"\xa0and\xa0",style:{},id:"1871"},{type:"Inline/Text",isBlock:!1,text:"false",style:{code:!0},id:"1874"},{type:"Inline/Text",isBlock:!1,text:"\xa0are special keywords that don't need quote marks.",style:{},id:"1875"}],style:{type:"Default"},id:"1867"}],id:"1877"},id:"1878"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"let myVariable = true;",style:{code:!0},id:"1880"}],style:{type:"Default"},id:"1879"}],id:"1881"},id:"1882"}],id:"1883"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Array",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/Array"}},id:"1885"}],style:{type:"Default"},id:"1884"}],id:"1886"},id:"1887"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This is a structure that allows you to store multiple values in a single reference.",style:{},id:"1889"}],style:{type:"Default"},id:"1888"}],id:"1890"},id:"1891"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"let myVariable = [1,'Bob','Steve',10];",style:{code:!0},id:"1893"}],style:{type:"Default"},id:"1892"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Refer to each member of the array like this:",style:{},id:"1896"}],style:{type:"Default"},id:"1894"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"myVariable[0]",style:{code:!0},id:"1899"},{type:"Inline/Text",isBlock:!1,text:",\xa0",style:{},id:"1900"},{type:"Inline/Text",isBlock:!1,text:"myVariable[1]",style:{code:!0},id:"1902"},{type:"Inline/Text",isBlock:!1,text:", etc.",style:{},id:"1903"}],style:{type:"Default"},id:"1897"}],id:"1904"},id:"1905"}],id:"1906"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Object",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/Object"}},id:"1908"}],style:{type:"Default"},id:"1907"}],id:"1909"},id:"1910"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This can be anything. Everything in JavaScript is an object and can be stored in a variable. Keep this in mind as you learn.",style:{},id:"1912"}],style:{type:"Default"},id:"1911"}],id:"1913"},id:"1914"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"let myVariable = document.querySelector('h1');",style:{code:!0},id:"1916"}],style:{type:"Default"},id:"1915"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"All of the above examples too.",style:{},id:"1919"}],style:{type:"Default"},id:"1917"}],id:"1920"},id:"1921"}],id:"1922"}],numColumns:3,id:"1923"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"So why do we need variables? Variables are necessary to do anything interesting in programming. If values couldn't change, then you couldn't do anything dynamic, like personalize a greeting message or change an image displayed in an image gallery.",style:{},id:"1925"}],style:{type:"Default"},id:"1924"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Comments",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#comments"}},id:"1927"}],style:{type:"Heading 2"},id:"1926"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Comments are snippets of text that can be added along with code. The browser ignores text marked as comments. You can write comments in JavaScript just as you can in CSS:",style:{},id:"1929"}],style:{type:"Default"},id:"1928"},{type:"Block/Code",isBlock:!0,code:"/*\nEverything in between is a comment.\n*/\n",id:"1930"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"If your comment contains no line breaks, it's an option to put it behind two slashes like this:",style:{},id:"1932"}],style:{type:"Default"},id:"1931"},{type:"Block/Code",isBlock:!0,code:"// This is a comment\n",id:"1933"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Operators",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#operators"}},id:"1935"}],style:{type:"Heading 2"},id:"1934"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"An\xa0",style:{},id:"1937"},{type:"Inline/Text",isBlock:!1,text:"operator",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/Operator"}},id:"1939"},{type:"Inline/Text",isBlock:!1,text:"\xa0is a mathematical symbol that produces a result based on two values (or variables). In the following table, you can see some of the simplest operators, along with some examples to try in the JavaScript console.",style:{},id:"1940"}],style:{type:"Default"},id:"1936"},{type:"Block/Table",isBlock:!0,rows:[{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Operator",style:{},id:"1943"}],style:{type:"Default",align:"Left"},id:"1942"}],id:"1944"},id:"1945"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Explanation",style:{},id:"1947"}],style:{type:"Default",align:"Left"},id:"1946"}],id:"1948"},id:"1949"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Symbol(s)",style:{},id:"1951"}],style:{type:"Default",align:"Left"},id:"1950"}],id:"1952"},id:"1953"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Example",style:{},id:"1955"}],style:{type:"Default",align:"Left"},id:"1954"}],id:"1956"},id:"1957"}],id:"1958"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Addition",style:{},id:"1960"}],style:{type:"Default",align:"Left"},id:"1959"}],id:"1961"},id:"1962"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Add two numbers together or combine two strings.",style:{},id:"1964"}],style:{type:"Default"},id:"1963"}],id:"1965"},id:"1966"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"+",style:{code:!0},id:"1968"}],style:{type:"Default"},id:"1967"}],id:"1969"},id:"1970"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"6 + 9;",style:{code:!0},id:"1972"}],style:{type:"Default"},id:"1971"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"'Hello ' + 'world!';",style:{code:!0},id:"1975"}],style:{type:"Default"},id:"1973"}],id:"1976"},id:"1977"}],id:"1978"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Subtraction, Multiplication, Division",style:{},id:"1980"}],style:{type:"Default",align:"Left"},id:"1979"}],id:"1981"},id:"1982"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"These do what you'd expect them to do in basic math.",style:{},id:"1984"}],style:{type:"Default"},id:"1983"}],id:"1985"},id:"1986"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"-",style:{code:!0},id:"1988"},{type:"Inline/Text",isBlock:!1,text:",\xa0",style:{},id:"1989"},{type:"Inline/Text",isBlock:!1,text:"*",style:{code:!0},id:"1991"},{type:"Inline/Text",isBlock:!1,text:",\xa0",style:{},id:"1992"},{type:"Inline/Text",isBlock:!1,text:"/",style:{code:!0},id:"1994"}],style:{type:"Default"},id:"1987"}],id:"1995"},id:"1996"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"9 - 3;",style:{code:!0},id:"1998"}],style:{type:"Default"},id:"1997"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"8 * 2; // multiply in JS is an asterisk",style:{code:!0},id:"2001"}],style:{type:"Default"},id:"1999"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"9 / 3;",style:{code:!0},id:"2004"}],style:{type:"Default"},id:"2002"}],id:"2005"},id:"2006"}],id:"2007"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Assignment",style:{},id:"2009"}],style:{type:"Default",align:"Left"},id:"2008"}],id:"2010"},id:"2011"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"As you've seen already: this assigns a value to a variable.",style:{},id:"2013"}],style:{type:"Default"},id:"2012"}],id:"2014"},id:"2015"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"=",style:{code:!0},id:"2017"}],style:{type:"Default"},id:"2016"}],id:"2018"},id:"2019"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"let myVariable = 'Bob';",style:{code:!0},id:"2021"}],style:{type:"Default"},id:"2020"}],id:"2022"},id:"2023"}],id:"2024"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Strict equality",style:{},id:"2026"}],style:{type:"Default",align:"Left"},id:"2025"}],id:"2027"},id:"2028"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This performs a test to see if two values are equal. It returns a\xa0",style:{},id:"2030"},{type:"Inline/Text",isBlock:!1,text:"true",style:{code:!0},id:"2032"},{type:"Inline/Text",isBlock:!1,text:"/",style:{},id:"2033"},{type:"Inline/Text",isBlock:!1,text:"false",style:{code:!0},id:"2034"},{type:"Inline/Text",isBlock:!1,text:"\xa0(Boolean) result.",style:{},id:"2035"}],style:{type:"Default"},id:"2029"}],id:"2037"},id:"2038"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"===",style:{code:!0},id:"2040"}],style:{type:"Default"},id:"2039"}],id:"2041"},id:"2042"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"let myVariable = 3;",style:{code:!0},id:"2044"}],style:{type:"Default"},id:"2043"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"myVariable === 4;",style:{code:!0},id:"2047"}],style:{type:"Default"},id:"2045"}],id:"2048"},id:"2049"}],id:"2050"},{cells:[{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Not, Does-not-equal",style:{},id:"2052"}],style:{type:"Default",align:"Left"},id:"2051"}],id:"2053"},id:"2054"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This returns the logically opposite value of what it precedes. It turns a\xa0",style:{},id:"2056"},{type:"Inline/Text",isBlock:!1,text:"true",style:{code:!0},id:"2058"},{type:"Inline/Text",isBlock:!1,text:"\xa0into a\xa0",style:{},id:"2059"},{type:"Inline/Text",isBlock:!1,text:"false",style:{code:!0},id:"2062"},{type:"Inline/Text",isBlock:!1,text:", etc.. When it is used alongside the Equality operator, the negation operator tests whether two values are\xa0",style:{},id:"2063"},{type:"Inline/Text",isBlock:!1,text:"not",style:{italic:!0},id:"2065"},{type:"Inline/Text",isBlock:!1,text:"\xa0equal.",style:{},id:"2066"}],style:{type:"Default"},id:"2055"}],id:"2068"},id:"2069"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"!",style:{code:!0},id:"2071"},{type:"Inline/Text",isBlock:!1,text:",\xa0",style:{},id:"2072"},{type:"Inline/Text",isBlock:!1,text:"!==",style:{code:!0},id:"2074"}],style:{type:"Default"},id:"2070"}],id:"2075"},id:"2076"},{value:{blocks:[{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:'For "Not", the basic expression is\xa0',style:{},id:"2078"},{type:"Inline/Text",isBlock:!1,text:"true",style:{code:!0},id:"2080"},{type:"Inline/Text",isBlock:!1,text:", but the comparison returns\xa0",style:{},id:"2081"},{type:"Inline/Text",isBlock:!1,text:"false",style:{code:!0},id:"2083"},{type:"Inline/Text",isBlock:!1,text:"\xa0because we negate it:",style:{},id:"2084"}],style:{type:"Default"},id:"2077"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"let myVariable = 3;",style:{code:!0},id:"2087"}],style:{type:"Default"},id:"2086"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"!(myVariable === 3);",style:{code:!0},id:"2090"}],style:{type:"Default"},id:"2088"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:'"Does-not-equal" gives basically the same result with different syntax. Here we are testing "is\xa0',style:{},id:"2092"},{type:"Inline/Text",isBlock:!1,text:"myVariable",style:{code:!0},id:"2094"},{type:"Inline/Text",isBlock:!1,text:'\xa0NOT equal to 3". This returns',style:{},id:"2095"},{type:"Inline/Text",isBlock:!1,text:"\xa0false",style:{code:!0},id:"2097"},{type:"Inline/Text",isBlock:!1,text:"\xa0because\xa0",style:{},id:"2099"},{type:"Inline/Text",isBlock:!1,text:"myVariable",style:{code:!0},id:"2102"},{type:"Inline/Text",isBlock:!1,text:"\xa0IS equal to 3:",style:{},id:"2103"}],style:{type:"Default"},id:"2091"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"let myVariable = 3;",style:{code:!0},id:"2106"}],style:{type:"Default"},id:"2105"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"myVariable !== 3;",style:{code:!0},id:"2109"}],style:{type:"Default"},id:"2107"}],id:"2110"},id:"2111"}],id:"2112"}],numColumns:4,id:"2113"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"There are a lot more operators to explore, but this is enough for now. See\xa0",style:{},id:"2115"},{type:"Inline/Text",isBlock:!1,text:"Expressions and operators",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators"}},id:"2117"},{type:"Inline/Text",isBlock:!1,text:"\xa0for a complete list.",style:{},id:"2118"}],style:{type:"Default"},id:"2114"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Note:\xa0Mixing data types can lead to some strange results when performing calculations. Be careful that you are referring to your variables correctly, and getting the results you expect. For example, enter\xa0",style:{},id:"2121"},{type:"Inline/Text",isBlock:!1,text:"'35' + '25'",style:{code:!0},id:"2125"},{type:"Inline/Text",isBlock:!1,text:"\xa0into your console. Why don't you get the result you expected? Because the quote marks turn the numbers into strings, so you've ended up concatenating strings rather than adding numbers. If you enter\xa0",style:{},id:"2126"},{type:"Inline/Text",isBlock:!1,text:"35 + 25",style:{code:!0},id:"2129"},{type:"Inline/Text",isBlock:!1,text:"\xa0you'll get the total of the two numbers.",style:{},id:"2130"}],style:{type:"Default"},id:"2120"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Conditionals",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#conditionals"}},id:"2133"}],style:{type:"Heading 2"},id:"2132"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Conditionals are code structures used to test if an expression returns true or not. A very common form of conditionals is the\xa0",style:{},id:"2135"},{type:"Inline/Text",isBlock:!1,text:"if...else",style:{code:!0},id:"2137"},{type:"Inline/Text",isBlock:!1,text:"\xa0statement. For example:",style:{},id:"2138"}],style:{type:"Default"},id:"2134"},{type:"Block/Code",isBlock:!0,code:'let iceCream = "chocolate";\nif (iceCream === "chocolate") {\n  alert("Yay, I love chocolate ice cream!");\n} else {\n  alert("Awwww, but chocolate is my favorite…");\n}\n',id:"2140"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"The expression inside the\xa0",style:{},id:"2142"},{type:"Inline/Text",isBlock:!1,text:"if ()",style:{code:!0},id:"2144"},{type:"Inline/Text",isBlock:!1,text:"\xa0is the test. This uses the strict equality operator (as described above) to compare the variable\xa0",style:{},id:"2145"},{type:"Inline/Text",isBlock:!1,text:"iceCream",style:{code:!0},id:"2148"},{type:"Inline/Text",isBlock:!1,text:"\xa0with the string\xa0",style:{},id:"2149"},{type:"Inline/Text",isBlock:!1,text:"chocolate",style:{code:!0},id:"2152"},{type:"Inline/Text",isBlock:!1,text:"\xa0to see if the two are equal. If this comparison returns\xa0",style:{},id:"2153"},{type:"Inline/Text",isBlock:!1,text:"true",style:{code:!0},id:"2156"},{type:"Inline/Text",isBlock:!1,text:", the first block of code runs. If the comparison is not true, the second block of code—after the\xa0",style:{},id:"2157"},{type:"Inline/Text",isBlock:!1,text:"else",style:{code:!0},id:"2159"},{type:"Inline/Text",isBlock:!1,text:"\xa0statement—runs instead.",style:{},id:"2160"}],style:{type:"Default"},id:"2141"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Functions",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#functions"}},id:"2163"}],style:{type:"Heading 2"},id:"2162"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Functions",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/Function"}},id:"2165"},{type:"Inline/Text",isBlock:!1,text:"\xa0are a way of packaging functionality that you wish to reuse. It's possible to define a body of code as a function that executes when you call the function name in your code. This is a good alternative to repeatedly writing the same code. You have already seen some uses of functions. For example:",style:{},id:"2166"}],style:{type:"Default"},id:"2164"},{type:"Block/Code",isBlock:!0,code:'let myVariable = document.querySelector("h1");\n',id:"2168"},{type:"Block/Code",isBlock:!0,code:'alert("hello!");\n',id:"2169"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"These functions,\xa0",style:{},id:"2171"},{type:"Inline/Text",isBlock:!1,text:"document.querySelector",style:{code:!0},id:"2173"},{type:"Inline/Text",isBlock:!1,text:"\xa0and\xa0",style:{},id:"2174"},{type:"Inline/Text",isBlock:!1,text:"alert",style:{code:!0},id:"2177"},{type:"Inline/Text",isBlock:!1,text:", are built into the browser.",style:{},id:"2178"}],style:{type:"Default"},id:"2170"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"If you see something which looks like a variable name, but it's followed by parentheses—\xa0",style:{},id:"2180"},{type:"Inline/Text",isBlock:!1,text:"()",style:{code:!0},id:"2182"},{type:"Inline/Text",isBlock:!1,text:"\xa0—it is likely a function. Functions often take\xa0",style:{},id:"2183"},{type:"Inline/Text",isBlock:!1,text:"arguments",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/Argument"}},id:"2186"},{type:"Inline/Text",isBlock:!1,text:": bits of data they need to do their job. Arguments go inside the parentheses, separated by commas if there is more than one argument.",style:{},id:"2187"}],style:{type:"Default"},id:"2179"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"For example, the\xa0",style:{},id:"2189"},{type:"Inline/Text",isBlock:!1,text:"alert()",style:{code:!0},id:"2191"},{type:"Inline/Text",isBlock:!1,text:"\xa0function makes a pop-up box appear inside the browser window, but we need to give it a string as an argument to tell the function what message to display.",style:{},id:"2192"}],style:{type:"Default"},id:"2188"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"You can also define your own functions. In the next example, we create a simple function which takes two numbers as arguments and multiplies them:",style:{},id:"2195"}],style:{type:"Default"},id:"2194"},{type:"Block/Code",isBlock:!0,code:"function multiply(num1, num2) {\n  let result = num1 * num2;\n  return result;\n}\n",id:"2196"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Try running this in the console; then test with several arguments. For example:",style:{},id:"2198"}],style:{type:"Default"},id:"2197"},{type:"Block/Code",isBlock:!0,code:"multiply(4, 7);\nmultiply(20, 20);\nmultiply(0.5, 3);\n",id:"2199"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Note:\xa0The\xa0",style:{},id:"2201"},{type:"Inline/Text",isBlock:!1,text:"return",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/return"}},id:"2205"},{type:"Inline/Text",isBlock:!1,text:"\xa0statement tells the browser to return the\xa0",style:{},id:"2206"},{type:"Inline/Text",isBlock:!1,text:"result",style:{code:!0},id:"2209"},{type:"Inline/Text",isBlock:!1,text:"\xa0variable out of the function so it is available to use. This is necessary because variables defined inside functions are only available inside those functions. This is called variable\xa0",style:{},id:"2210"},{type:"Inline/Text",isBlock:!1,text:"scoping",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Glossary/Scope"}},id:"2213"},{type:"Inline/Text",isBlock:!1,text:". (Read more about\xa0",style:{},id:"2214"},{type:"Inline/Text",isBlock:!1,text:"variable scoping",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Grammar_and_types#variable_scope"}},id:"2216"},{type:"Inline/Text",isBlock:!1,text:".)",style:{},id:"2217"}],style:{type:"Default"},id:"2200"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Events",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#events"}},id:"2219"}],style:{type:"Heading 2"},id:"2218"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Real interactivity on a website requires event handlers. These are code structures that listen for activity in the browser, and run code in response. The most obvious example is handling the\xa0",style:{},id:"2221"},{type:"Inline/Text",isBlock:!1,text:"click event",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event"}},id:"2223"},{type:"Inline/Text",isBlock:!1,text:", which is fired by the browser when you click on something with your mouse. To demonstrate this, enter the following into your console, then click on the current webpage:",style:{},id:"2224"}],style:{type:"Default"},id:"2220"},{type:"Block/Code",isBlock:!0,code:'document.querySelector("html").addEventListener("click", function () {\n  alert("Ouch! Stop poking me!");\n});\n',id:"2225"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"There are a number of ways to attach an event handler to an element. Here we select the\xa0",style:{},id:"2227"},{type:"Inline/Text",isBlock:!1,text:"<html>",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/HTML/Element/html"}},id:"2229"},{type:"Inline/Text",isBlock:!1,text:"\xa0element. We then call its\xa0",style:{},id:"2230"},{type:"Inline/Text",isBlock:!1,text:"addEventListener()",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/API/EventTarget/addEventListener"}},id:"2233"},{type:"Inline/Text",isBlock:!1,text:"\xa0function, passing in the name of the event to listen to (",style:{},id:"2234"},{type:"Inline/Text",isBlock:!1,text:"'click'",style:{code:!0},id:"2236"},{type:"Inline/Text",isBlock:!1,text:") and a function to run when the event happens.",style:{},id:"2237"}],style:{type:"Default"},id:"2226"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"The function we just passed to\xa0",style:{},id:"2239"},{type:"Inline/Text",isBlock:!1,text:"addEventListener()",style:{code:!0},id:"2241"},{type:"Inline/Text",isBlock:!1,text:"\xa0here is called an\xa0",style:{},id:"2242"},{type:"Inline/Text",isBlock:!1,text:"anonymous function",style:{italic:!0},id:"2245"},{type:"Inline/Text",isBlock:!1,text:", because it doesn't have a name. There's an alternative way of writing anonymous functions, which we call an\xa0",style:{},id:"2246"},{type:"Inline/Text",isBlock:!1,text:"arrow function",style:{italic:!0},id:"2248"},{type:"Inline/Text",isBlock:!1,text:". An arrow function uses\xa0",style:{},id:"2249"},{type:"Inline/Text",isBlock:!1,text:"() =>",style:{code:!0},id:"2251"},{type:"Inline/Text",isBlock:!1,text:"\xa0instead of\xa0",style:{},id:"2252"},{type:"Inline/Text",isBlock:!1,text:"function ()",style:{code:!0},id:"2255"},{type:"Inline/Text",isBlock:!1,text:":",style:{},id:"2256"}],style:{type:"Default"},id:"2238"},{type:"Block/Code",isBlock:!0,code:'document.querySelector("html").addEventListener("click", () => {\n  alert("Ouch! Stop poking me!");\n});\n',id:"2257"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Supercharging our example website",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#supercharging_our_example_website"}},id:"2259"}],style:{type:"Heading 2"},id:"2258"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"With this review of JavaScript basics completed (above), let's add some new features to our example site.",style:{},id:"2261"}],style:{type:"Default"},id:"2260"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Before going any further, delete the current contents of your\xa0",style:{},id:"2263"},{type:"Inline/Text",isBlock:!1,text:"main.js",style:{code:!0},id:"2265"},{type:"Inline/Text",isBlock:!1,text:'\xa0file — the bit you added earlier during the "Hello world!" example — and save the empty file. If you don\'t, the existing code will clash with the new code you are about to add.',style:{},id:"2266"}],style:{type:"Default"},id:"2262"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Adding an image changer",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#adding_an_image_changer"}},id:"2269"}],style:{type:"Heading 2"},id:"2268"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"In this section, you will learn how to use JavaScript and DOM API features to alternate the display of one of two images. This change will happen as a user clicks the displayed image.",style:{},id:"2271"}],style:{type:"Default"},id:"2270"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Choose an image you want to feature on your example site. Ideally, the image will be the same size as the image you added previously, or as close as possible.",style:{},id:"2274"}],style:{type:"Numbered List",listId:"2272"},id:"2273"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Save this image in your\xa0",style:{},id:"2276"},{type:"Inline/Text",isBlock:!1,text:"images",style:{code:!0},id:"2278"},{type:"Inline/Text",isBlock:!1,text:"\xa0folder.",style:{},id:"2279"}],style:{type:"Numbered List",listId:"2272"},id:"2275"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Rename the image\xa0",style:{},id:"2282"},{type:"Inline/Text",isBlock:!1,text:"firefox2.png",style:{italic:!0},id:"2284"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"2285"}],style:{type:"Numbered List",listId:"2272"},id:"2281"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Add the following JavaScript code to your\xa0",style:{},id:"2287"},{type:"Inline/Text",isBlock:!1,text:"main.js",style:{code:!0},id:"2289"},{type:"Inline/Text",isBlock:!1,text:"\xa0file.",style:{},id:"2290"}],style:{type:"Numbered List",listId:"2272"},id:"2286"},{type:"Block/Code",isBlock:!0,code:'const myImage = document.querySelector("img");\n\nmyImage.onclick = () => {\n  const mySrc = myImage.getAttribute("src");\n  if (mySrc === "images/firefox-icon.png") {\n    myImage.setAttribute("src", "images/firefox2.png");\n  } else {\n    myImage.setAttribute("src", "images/firefox-icon.png");\n  }\n};\n',id:"2292"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Save all files and load\xa0",style:{},id:"2294"},{type:"Inline/Text",isBlock:!1,text:"index.html",style:{code:!0},id:"2296"},{type:"Inline/Text",isBlock:!1,text:"\xa0in the browser. Now when you click the image, it should change to the other one.",style:{},id:"2297"}],style:{type:"Numbered List",listId:"2272"},id:"2293"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This is what happened. You stored a reference to your\xa0",style:{},id:"2300"},{type:"Inline/Text",isBlock:!1,text:"<img>",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img"}},id:"2302"},{type:"Inline/Text",isBlock:!1,text:"\xa0element in\xa0",style:{},id:"2303"},{type:"Inline/Text",isBlock:!1,text:"myImage",style:{code:!0},id:"2306"},{type:"Inline/Text",isBlock:!1,text:". Next, you made its\xa0",style:{},id:"2307"},{type:"Inline/Text",isBlock:!1,text:"onclick",style:{code:!0},id:"2309"},{type:"Inline/Text",isBlock:!1,text:'\xa0event handler property equal to a function with no name (an "anonymous" function). So every time this element is clicked:',style:{},id:"2310"}],style:{type:"Default"},id:"2299"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"The code retrieves the value of the image's\xa0",style:{},id:"2314"},{type:"Inline/Text",isBlock:!1,text:"src",style:{code:!0},id:"2316"},{type:"Inline/Text",isBlock:!1,text:"\xa0attribute.",style:{},id:"2317"}],style:{type:"Numbered List",listId:"2312"},id:"2313"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"The code uses a conditional to check if the\xa0",style:{},id:"2320"},{type:"Inline/Text",isBlock:!1,text:"src",style:{code:!0},id:"2322"},{type:"Inline/Text",isBlock:!1,text:"\xa0value is equal to the path of the original image:",style:{},id:"2323"}],style:{type:"Numbered List",listId:"2312"},id:"2319"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"If it is, the code changes the\xa0",style:{},id:"2327"},{type:"Inline/Text",isBlock:!1,text:"src",style:{code:!0},id:"2329"},{type:"Inline/Text",isBlock:!1,text:"\xa0value to the path of the second image, forcing the other image to be loaded inside the\xa0",style:{},id:"2330"},{type:"Inline/Text",isBlock:!1,text:"<img>",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img"}},id:"2333"},{type:"Inline/Text",isBlock:!1,text:"\xa0element.",style:{},id:"2334"}],style:{type:"Numbered List",listId:"2325",indentLevel:1},id:"2326"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"If it isn't (meaning it must already have changed), the\xa0",style:{},id:"2337"},{type:"Inline/Text",isBlock:!1,text:"src",style:{code:!0},id:"2339"},{type:"Inline/Text",isBlock:!1,text:"\xa0value swaps back to the original image path, to the original state.",style:{},id:"2340"}],style:{type:"Numbered List",listId:"2325",indentLevel:1},id:"2336"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Adding a personalized welcome message",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#adding_a_personalized_welcome_message"}},id:"2343"}],style:{type:"Heading 2"},id:"2342"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Next, let's change the page title to a personalized welcome message when the user first visits the site. This welcome message will persist. Should the user leave the site and return later, we will save the message using the\xa0",style:{},id:"2345"},{type:"Inline/Text",isBlock:!1,text:"Web Storage API",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API"}},id:"2347"},{type:"Inline/Text",isBlock:!1,text:". We will also include an option to change the user, and therefore, the welcome message.",style:{},id:"2348"}],style:{type:"Default"},id:"2344"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"In\xa0",style:{},id:"2351"},{type:"Inline/Text",isBlock:!1,text:"index.html",style:{code:!0},id:"2353"},{type:"Inline/Text",isBlock:!1,text:", add the following line just before the\xa0",style:{},id:"2354"},{type:"Inline/Text",isBlock:!1,text:"<script>",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script"}},id:"2356"},{type:"Inline/Text",isBlock:!1,text:"\xa0element:",style:{},id:"2357"}],style:{type:"Numbered List",listId:"2349"},id:"2350"},{type:"Block/Code",isBlock:!0,code:"<button>Change user</button>\n",id:"2359"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"In\xa0",style:{},id:"2361"},{type:"Inline/Text",isBlock:!1,text:"main.js",style:{code:!0},id:"2363"},{type:"Inline/Text",isBlock:!1,text:", place the following code at the bottom of the file, exactly as it is written. This takes references to the new button and the heading, storing each inside variables:",style:{},id:"2364"}],style:{type:"Numbered List",listId:"2349"},id:"2360"},{type:"Block/Code",isBlock:!0,code:'let myButton = document.querySelector("button");\nlet myHeading = document.querySelector("h1");\n',id:"2365"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Add the following function to set the personalized greeting. This won't do anything yet, but this will change soon.",style:{},id:"2367"}],style:{type:"Numbered List",listId:"2349"},id:"2366"},{type:"Block/Code",isBlock:!0,code:'function setUserName() {\n  const myName = prompt("Please enter your name.");\n  localStorage.setItem("name", myName);\n  myHeading.textContent = `Mozilla is cool, ${myName}`;\n}\n',id:"2368"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"The\xa0",style:{},id:"2370"},{type:"Inline/Text",isBlock:!1,text:"setUserName()",style:{code:!0},id:"2372"},{type:"Inline/Text",isBlock:!1,text:"\xa0function contains a\xa0",style:{},id:"2373"},{type:"Inline/Text",isBlock:!1,text:"prompt()",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/API/Window/prompt"}},id:"2376"},{type:"Inline/Text",isBlock:!1,text:"\xa0function, which displays a dialog box, similar to\xa0",style:{},id:"2377"},{type:"Inline/Text",isBlock:!1,text:"alert()",style:{code:!0},id:"2380"},{type:"Inline/Text",isBlock:!1,text:". This\xa0",style:{},id:"2381"},{type:"Inline/Text",isBlock:!1,text:"prompt()",style:{code:!0},id:"2383"},{type:"Inline/Text",isBlock:!1,text:"\xa0function does more than\xa0",style:{},id:"2384"},{type:"Inline/Text",isBlock:!1,text:"alert()",style:{code:!0},id:"2387"},{type:"Inline/Text",isBlock:!1,text:", asking the user to enter data, and storing it in a variable after the user clicks\xa0",style:{},id:"2388"},{type:"Inline/Text",isBlock:!1,text:"OK.",style:{italic:!0},id:"2390"},{type:"Inline/Text",isBlock:!1,text:"\xa0In this case, we are asking the user to enter a name. Next, the code calls on an API\xa0",style:{},id:"2391"},{type:"Inline/Text",isBlock:!1,text:"localStorage",style:{code:!0},id:"2394"},{type:"Inline/Text",isBlock:!1,text:", which allows us to store data in the browser and retrieve it later. We use localStorage's\xa0",style:{},id:"2395"},{type:"Inline/Text",isBlock:!1,text:"setItem()",style:{code:!0},id:"2397"},{type:"Inline/Text",isBlock:!1,text:"\xa0function to create and store a data item called\xa0",style:{},id:"2398"},{type:"Inline/Text",isBlock:!1,text:"'name'",style:{code:!0},id:"2401"},{type:"Inline/Text",isBlock:!1,text:", setting its value to the\xa0",style:{},id:"2402"},{type:"Inline/Text",isBlock:!1,text:"myName",style:{code:!0},id:"2404"},{type:"Inline/Text",isBlock:!1,text:"\xa0variable which contains the user's entry for the name. Finally, we set the\xa0",style:{},id:"2405"},{type:"Inline/Text",isBlock:!1,text:"textContent",style:{code:!0},id:"2408"},{type:"Inline/Text",isBlock:!1,text:"\xa0of the heading to a string, plus the user's newly stored name.",style:{},id:"2409"}],style:{type:"Default",indentLevel:1},id:"2369"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Add the following condition block. We could call this initialization code, as it structures the app when it first loads.",style:{},id:"2412"}],style:{type:"Numbered List",listId:"2349"},id:"2411"},{type:"Block/Code",isBlock:!0,code:'if (!localStorage.getItem("name")) {\n  setUserName();\n} else {\n  const storedName = localStorage.getItem("name");\n  myHeading.textContent = `Mozilla is cool, ${storedName}`;\n}\n',id:"2413"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This first line of this block uses the negation operator (logical NOT, represented by the\xa0",style:{},id:"2415"},{type:"Inline/Text",isBlock:!1,text:"!",style:{code:!0},id:"2417"},{type:"Inline/Text",isBlock:!1,text:") to check whether the\xa0",style:{},id:"2418"},{type:"Inline/Text",isBlock:!1,text:"name",style:{code:!0},id:"2420"},{type:"Inline/Text",isBlock:!1,text:"\xa0data exists. If not, the\xa0",style:{},id:"2421"},{type:"Inline/Text",isBlock:!1,text:"setUserName()",style:{code:!0},id:"2424"},{type:"Inline/Text",isBlock:!1,text:"\xa0function runs to create it. If it exists (that is, the user set a user name during a previous visit), we retrieve the stored name using\xa0",style:{},id:"2425"},{type:"Inline/Text",isBlock:!1,text:"getItem()",style:{code:!0},id:"2428"},{type:"Inline/Text",isBlock:!1,text:"\xa0and set the\xa0",style:{},id:"2429"},{type:"Inline/Text",isBlock:!1,text:"textContent",style:{code:!0},id:"2432"},{type:"Inline/Text",isBlock:!1,text:"\xa0of the heading to a string, plus the user's name, as we did inside\xa0",style:{},id:"2433"},{type:"Inline/Text",isBlock:!1,text:"setUserName()",style:{code:!0},id:"2436"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"2437"}],style:{type:"Default",indentLevel:1},id:"2414"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Put this\xa0",style:{},id:"2439"},{type:"Inline/Text",isBlock:!1,text:"onclick",style:{code:!0},id:"2441"},{type:"Inline/Text",isBlock:!1,text:"\xa0event handler (below) on the button. When clicked,\xa0",style:{},id:"2442"},{type:"Inline/Text",isBlock:!1,text:"setUserName()",style:{code:!0},id:"2445"},{type:"Inline/Text",isBlock:!1,text:"\xa0runs. This allows the user to enter a different name by pressing the button.",style:{},id:"2446"}],style:{type:"Numbered List",listId:"2349"},id:"2438"},{type:"Block/Code",isBlock:!0,code:"myButton.onclick = () => {\n  setUserName();\n};\n",id:"2448"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"A user name of null?",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#a_user_name_of_null"}},id:"2450"}],style:{type:"Heading 2"},id:"2449"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"When you run the example and get the dialog box that prompts you to enter your user name, try pressing the\xa0",style:{},id:"2452"},{type:"Inline/Text",isBlock:!1,text:"Cancel",style:{italic:!0},id:"2454"},{type:"Inline/Text",isBlock:!1,text:"\xa0button. You should end up with a title that reads\xa0",style:{},id:"2455"},{type:"Inline/Text",isBlock:!1,text:"Mozilla is cool, null",style:{italic:!0},id:"2458"},{type:"Inline/Text",isBlock:!1,text:". This happens because—when you cancel the prompt—the value is set as\xa0",style:{},id:"2459"},{type:"Inline/Text",isBlock:!1,text:"null",style:{underline:!0,code:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/null"}},id:"2461"},{type:"Inline/Text",isBlock:!1,text:".\xa0",style:{},id:"2462"},{type:"Inline/Text",isBlock:!1,text:"Null",style:{italic:!0},id:"2464"},{type:"Inline/Text",isBlock:!1,text:"\xa0is a special value in JavaScript that refers to the absence of a value.",style:{},id:"2465"}],style:{type:"Default"},id:"2451"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Also, try clicking\xa0",style:{},id:"2468"},{type:"Inline/Text",isBlock:!1,text:"OK",style:{italic:!0},id:"2470"},{type:"Inline/Text",isBlock:!1,text:"\xa0without entering a name. You should end up with a title that reads\xa0",style:{},id:"2471"},{type:"Inline/Text",isBlock:!1,text:"Mozilla is cool,",style:{italic:!0},id:"2474"},{type:"Inline/Text",isBlock:!1,text:"\xa0for fairly obvious reasons.",style:{},id:"2475"}],style:{type:"Default"},id:"2467"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"To avoid these problems, you could check that the user hasn't entered a blank name. Update your\xa0",style:{},id:"2478"},{type:"Inline/Text",isBlock:!1,text:"setUserName()",style:{code:!0},id:"2480"},{type:"Inline/Text",isBlock:!1,text:"\xa0function to this:",style:{},id:"2481"}],style:{type:"Default"},id:"2477"},{type:"Block/Code",isBlock:!0,code:'function setUserName() {\n  const myName = prompt("Please enter your name.");\n  if (!myName) {\n    setUserName();\n  } else {\n    localStorage.setItem("name", myName);\n    myHeading.textContent = `Mozilla is cool, ${myName}`;\n  }\n}\n',id:"2483"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"In human language, this means: If\xa0",style:{},id:"2485"},{type:"Inline/Text",isBlock:!1,text:"myName",style:{code:!0},id:"2487"},{type:"Inline/Text",isBlock:!1,text:"\xa0has no value, run\xa0",style:{},id:"2488"},{type:"Inline/Text",isBlock:!1,text:"setUserName()",style:{code:!0},id:"2491"},{type:"Inline/Text",isBlock:!1,text:"\xa0again from the start. If it does have a value (if the above statement is not true), then store the value in\xa0",style:{},id:"2492"},{type:"Inline/Text",isBlock:!1,text:"localStorage",style:{code:!0},id:"2495"},{type:"Inline/Text",isBlock:!1,text:"\xa0and set it as the heading's text.",style:{},id:"2496"}],style:{type:"Default"},id:"2484"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Conclusion",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#conclusion"}},id:"2499"}],style:{type:"Heading 2"},id:"2498"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"If you have followed all the instructions in this article, you should end up with a page that looks something like the image below. You can also\xa0",style:{},id:"2501"},{type:"Inline/Text",isBlock:!1,text:"view our version",style:{underline:!0,link:{href:"https://mdn.github.io/beginner-html-site-scripted/"}},id:"2503"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"2504"}],style:{type:"Default"},id:"2500"},{type:"Block/Image",isBlock:!0,src:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics/website-screen-scripted.png",caption:"Final look of HTML page after creating elements: a header, large centered logo, content, and a button",id:"2505"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"If you get stuck, you can compare your work with our\xa0",style:{},id:"2507"},{type:"Inline/Text",isBlock:!1,text:"finished example code on GitHub",style:{underline:!0,link:{href:"https://github.com/mdn/beginner-html-site-scripted/blob/gh-pages/scripts/main.js"}},id:"2509"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"2510"}],style:{type:"Default"},id:"2506"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"We have just scratched the surface of JavaScript. If you enjoyed playing, and wish to go further, take advantage of the resources listed below.",style:{},id:"2512"}],style:{type:"Default"},id:"2511"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"See also",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#see_also"}},id:"2514"}],style:{type:"Heading 2"},id:"2513"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Dynamic client-side scripting with JavaScript",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/JavaScript"}},id:"2516"}],style:{type:"Default"},id:"2515"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Dive into JavaScript in much more detail.",style:{},id:"2518"}],style:{type:"Default"},id:"2517"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Learn JavaScript",style:{underline:!0,link:{href:"https://learnjavascript.online/"}},id:"2520"}],style:{type:"Default"},id:"2519"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This is an excellent resource for aspiring web developers! Learn JavaScript in an interactive environment, with short lessons and interactive tests, guided by an automated assessment. The first 40 lessons are free. The complete course is available for a small one-time payment.",style:{},id:"2522"}],style:{type:"Default"},id:"2521"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"In this module",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#in_this_module"}},id:"2524"}],style:{type:"Heading 2"},id:"2523"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Installing basic software",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/Installing_basic_software"}},id:"2527"}],style:{type:"Bullet List",listId:"2525"},id:"2526"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"What will your website look like?",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/What_will_your_website_look_like"}},id:"2529"}],style:{type:"Bullet List",listId:"2525"},id:"2528"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Dealing with files",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/Dealing_with_files"}},id:"2531"}],style:{type:"Bullet List",listId:"2525"},id:"2530"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"HTML basics",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/HTML_basics"}},id:"2533"}],style:{type:"Bullet List",listId:"2525"},id:"2532"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"CSS basics",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/CSS_basics"}},id:"2535"}],style:{type:"Bullet List",listId:"2525"},id:"2534"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"JavaScript basics",style:{link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics"}},id:"2537"}],style:{type:"Bullet List",listId:"2525"},id:"2536"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Publishing your website",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/Publishing_your_website"}},id:"2539"}],style:{type:"Bullet List",listId:"2525"},id:"2538"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"How the web works",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/How_the_Web_works"}},id:"2541"}],style:{type:"Bullet List",listId:"2525"},id:"2540"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Found a content problem with this page?",style:{},id:"2543"}],style:{type:"Heading 2"},id:"2542"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Edit the page\xa0",style:{},id:"2546"},{type:"Inline/Text",isBlock:!1,text:"on GitHub",style:{underline:!0,link:{href:"https://github.com/mdn/content/edit/main/files/en-us/learn/getting_started_with_the_web/javascript_basics/index.md"}},id:"2548"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"2549"}],style:{type:"Bullet List",listId:"2544"},id:"2545"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Report the\xa0",style:{},id:"2551"},{type:"Inline/Text",isBlock:!1,text:"content issue",style:{underline:!0,link:{href:"https://github.com/mdn/content/issues/new?template=page-report.yml&mdn-url=https%3A%2F%2Fdeveloper.mozilla.org%2Fen-US%2Fdocs%2FLearn%2FGetting_started_with_the_web%2FJavaScript_basics&metadata=%3C%21--+Do+not+make+changes+below+this+line+--%3E%0A%3Cdetails%3E%0A%3Csummary%3EPage+report+details%3C%2Fsummary%3E%0A%0A*+Folder%3A+%60en-us%2Flearn%2Fgetting_started_with_the_web%2Fjavascript_basics%60%0A*+MDN+URL%3A+https%3A%2F%2Fdeveloper.mozilla.org%2Fen-US%2Fdocs%2FLearn%2FGetting_started_with_the_web%2FJavaScript_basics%0A*+GitHub+URL%3A+https%3A%2F%2Fgithub.com%2Fmdn%2Fcontent%2Fblob%2Fmain%2Ffiles%2Fen-us%2Flearn%2Fgetting_started_with_the_web%2Fjavascript_basics%2Findex.md%0A*+Last+commit%3A+https%3A%2F%2Fgithub.com%2Fmdn%2Fcontent%2Fcommit%2Fb0acf7e8607b12f618d1d690841ee6dc8b19671a%0A*+Document+last+modified%3A+2023-01-02T23%3A44%3A35.000Z%0A%0A%3C%2Fdetails%3E"}},id:"2553"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"2554"}],style:{type:"Bullet List",listId:"2544"},id:"2550"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"View the source\xa0",style:{},id:"2556"},{type:"Inline/Text",isBlock:!1,text:"on GitHub",style:{underline:!0,link:{href:"https://github.com/mdn/content/blob/main/files/en-us/learn/getting_started_with_the_web/javascript_basics/index.md?plain=1"}},id:"2558"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"2559"}],style:{type:"Bullet List",listId:"2544"},id:"2555"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"Want to get more involved? Learn\xa0",style:{},id:"2561"},{type:"Inline/Text",isBlock:!1,text:"how to contribute",style:{underline:!0,link:{href:"https://github.com/mdn/content/blob/main/CONTRIBUTING.md"}},id:"2563"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"2564"}],style:{type:"Default"},id:"2560"},{type:"Block/Paragraph",isBlock:!1,children:[{type:"Inline/Text",isBlock:!1,text:"This page was last modified on\xa0Jan 3, 2023\xa0by\xa0",style:{},id:"2566"},{type:"Inline/Text",isBlock:!1,text:"MDN contributors",style:{underline:!0,link:{href:"https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics/contributors.txt"}},id:"2572"},{type:"Inline/Text",isBlock:!1,text:".",style:{},id:"2573"}],style:{type:"Default"},id:"2565"}],id:"2574"};
 
   return (
     <div className={['page', roboto.className].join(' ')}>
       <div className="page__inner">
         <main className="editor-wrapper">
-          <ReactEditor initialValue={initialValue} makeId={id} />
+          <ReactEditor initialValue={initialValue as EditorValue} makeId={id} />
         </main>
       </div>
     </div>
