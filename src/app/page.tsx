@@ -5,13 +5,11 @@ import React, {
   memo,
   useContext,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import Image from 'next/image';
 import { Roboto } from '@next/font/google';
 import { Tooltip } from '@/Tooltip';
 import { createDraft, finishDraft } from 'immer';
@@ -38,7 +36,6 @@ enum BlockNodeType {
 
 enum InlineNodeType {
   Text = 'Inline/Text',
-  Mention = 'Inline/Mention',
 }
 
 enum SelectionType {
@@ -110,44 +107,62 @@ interface ImageNode {
 
 enum ParagraphStyleType {
   Default = 'Default',
-  Subtitle = 'Heading',
-  Title = 'Title',
+  Heading2 = 'Heading 2',
+  Heading1 = 'Heading 1',
+  Heading3 = 'Heading 3',
   Quote = 'Quote',
-  PullQuote = 'PullQuote',
-  BulletList = 'BulletList',
-  NumberedList = 'NumberedList',
+  BulletList = 'Bullet List',
+  NumberedList = 'Numbered List',
 }
 
-interface DefaultParagraphStyle {
+enum TextAlign {
+  Left = 'Left',
+  Center = 'Center',
+  Right = 'Right',
+  Justify = 'Justify',
+}
+
+enum IndentType {
+  FirstLine,
+  AllLines,
+}
+const MAX_INDENT = 8;
+interface ParagraphStyleBase {
+  align?: TextAlign;
+  indentLevel?: number;
+  hangingIndent?: boolean;
+}
+
+interface DefaultParagraphStyle extends ParagraphStyleBase {
   type: ParagraphStyleType.Default;
 }
-interface HeadingParagraphStyle {
-  type: ParagraphStyleType.Subtitle;
+interface Heading2ParagraphStyle extends ParagraphStyleBase {
+  type: ParagraphStyleType.Heading2;
 }
-interface TitleParagraphStyle {
-  type: ParagraphStyleType.Title;
+interface Heading1ParagraphStyle extends ParagraphStyleBase {
+  type: ParagraphStyleType.Heading1;
 }
-interface QuoteParagraphStyle {
+interface Heading3ParagraphStyle extends ParagraphStyleBase {
+  type: ParagraphStyleType.Heading3;
+}
+interface QuoteParagraphStyle extends ParagraphStyleBase {
   type: ParagraphStyleType.Quote;
 }
-interface PullQuoteParagraphStyle {
-  type: ParagraphStyleType.PullQuote;
-}
-interface BulletListParagraphStyle {
+interface BulletListParagraphStyle extends ParagraphStyleBase {
   type: ParagraphStyleType.BulletList;
   listId: string;
 }
-interface NumberedListParagraphStyle {
+interface NumberedListParagraphStyle extends ParagraphStyleBase {
   type: ParagraphStyleType.NumberedList;
   listId: string;
 }
 
 type ParagraphStyle =
   | DefaultParagraphStyle
-  | HeadingParagraphStyle
-  | TitleParagraphStyle
+  | Heading2ParagraphStyle
+  | Heading1ParagraphStyle
+  | Heading3ParagraphStyle
   | QuoteParagraphStyle
-  | PullQuoteParagraphStyle
   | BulletListParagraphStyle
   | NumberedListParagraphStyle;
 
@@ -164,6 +179,10 @@ enum TextScript {
   Subscript = 'Subscript',
 }
 
+interface Link {
+  href: string;
+}
+
 interface TextStyle {
   bold?: true;
   italic?: true;
@@ -171,6 +190,7 @@ interface TextStyle {
   code?: true;
   strikethrough?: true;
   script?: TextScript;
+  link?: Link;
 }
 
 interface TextNode {
@@ -181,15 +201,8 @@ interface TextNode {
   id: string;
 }
 
-interface MentionNode {
-  type: InlineNodeType.Mention;
-  isBlock: true;
-  username: string;
-  id: string;
-}
-
 type BlockNode = ImageNode | TableNode | ParagraphNode;
-type InlineNode = TextNode | MentionNode;
+type InlineNode = TextNode;
 
 enum PushStateAction {
   Unique,
@@ -230,35 +243,67 @@ function makeParagraph(
 function makeDefaultParagraph(
   children: InlineNode[],
   id: string,
+  styleBase?: ParagraphStyleBase,
 ): ParagraphNode {
-  return makeParagraph(children, { type: ParagraphStyleType.Default }, id);
+  return makeParagraph(
+    children,
+    { type: ParagraphStyleType.Default, ...styleBase },
+    id,
+  );
 }
-function makeSubtitleParagraph(
+function makeHeading2Paragraph(
   children: InlineNode[],
   id: string,
+  styleBase?: ParagraphStyleBase,
 ): ParagraphNode {
-  return makeParagraph(children, { type: ParagraphStyleType.Subtitle }, id);
+  return makeParagraph(
+    children,
+    { type: ParagraphStyleType.Heading2, ...styleBase },
+    id,
+  );
 }
-function makeTitleParagraph(children: InlineNode[], id: string): ParagraphNode {
-  return makeParagraph(children, { type: ParagraphStyleType.Title }, id);
-}
-function makeQuoteParagraph(children: InlineNode[], id: string): ParagraphNode {
-  return makeParagraph(children, { type: ParagraphStyleType.Quote }, id);
-}
-function makePullQuoteParagraph(
+function makeHeading1Paragraph(
   children: InlineNode[],
   id: string,
+  styleBase?: ParagraphStyleBase,
 ): ParagraphNode {
-  return makeParagraph(children, { type: ParagraphStyleType.PullQuote }, id);
+  return makeParagraph(
+    children,
+    { type: ParagraphStyleType.Heading1, ...styleBase },
+    id,
+  );
+}
+function makeHeading3Paragraph(
+  children: InlineNode[],
+  id: string,
+  styleBase?: ParagraphStyleBase,
+): ParagraphNode {
+  return makeParagraph(
+    children,
+    { type: ParagraphStyleType.Heading3, ...styleBase },
+    id,
+  );
+}
+function makeQuoteParagraph(
+  children: InlineNode[],
+  id: string,
+  styleBase?: ParagraphStyleBase,
+): ParagraphNode {
+  return makeParagraph(
+    children,
+    { type: ParagraphStyleType.Quote, ...styleBase },
+    id,
+  );
 }
 function makeBulletListParagraph(
   children: InlineNode[],
   listId: string,
   id: string,
+  styleBase?: ParagraphStyleBase,
 ): ParagraphNode {
   return makeParagraph(
     children,
-    { type: ParagraphStyleType.BulletList, listId },
+    { type: ParagraphStyleType.BulletList, listId, ...styleBase },
     id,
   );
 }
@@ -266,10 +311,11 @@ function makeNumberedListParagraph(
   children: InlineNode[],
   listId: string,
   id: string,
+  styleBase?: ParagraphStyleBase,
 ): ParagraphNode {
   return makeParagraph(
     children,
-    { type: ParagraphStyleType.NumberedList, listId },
+    { type: ParagraphStyleType.NumberedList, listId, ...styleBase },
     id,
   );
 }
@@ -322,15 +368,6 @@ function makeText(text: string, style: TextStyle, id: string): TextNode {
   };
 }
 
-function makeMention(text: string, username: string, id: string): MentionNode {
-  return {
-    type: InlineNodeType.Mention,
-    isBlock: true,
-    username,
-    id,
-  };
-}
-
 function makeDefaultText(text: string, id: string): TextNode {
   return makeText(text, {}, id);
 }
@@ -350,7 +387,7 @@ function ReactTableNode_({
   selectedCells,
 }: ReactTableNodeProps & { selectedCells: string[] }): JSX.Element {
   return (
-    <div>
+    <div className="table-div">
       <table
         data-family={EditorFamilyType.Block}
         data-type={BlockNodeType.Table}
@@ -372,7 +409,7 @@ function ReactTableNode_({
                           : undefined
                       }
                     >
-                      <ReactEditorValue value={cell.value} />
+                      <ReactEditorValue value={cell.value} isTable />
                     </td>
                   );
                 })}
@@ -424,7 +461,7 @@ function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
 const ReactBlockImageNode = memo(ReactBlockImageNode_);
 
 function ReactParagraphNode_(
-  props:
+  props: (
     | {
         value: ParagraphNode & {
           style: Exclude<ParagraphStyle, NumberedListParagraphStyle>;
@@ -435,47 +472,101 @@ function ReactParagraphNode_(
           style: NumberedListParagraphStyle;
         };
         listIndex: number;
-      },
+      }
+  ) & {
+    isTable: boolean;
+  },
 ): JSX.Element {
-  const { value } = props;
+  const { value, isTable } = props;
   const isEmpty =
     value.children.length === 1 &&
     !value.children[0].isBlock &&
     value.children[0].text === '';
-  const children = isEmpty ? (
-    <br />
-  ) : (
-    value.children.map((child, i) => {
-      switch (child.type) {
-        case InlineNodeType.Text: {
-          let cn: string | undefined;
-          if (child.style.code) {
-            const prevChild = i === 0 ? null : value.children[i - 1];
-            if (!prevChild || (!prevChild.isBlock && !prevChild.style.code)) {
-              cn = (cn ? cn + ' ' : (cn = '')) + 'code-first';
-            }
-            const nextChild =
-              i === value.children.length - 1 ? null : value.children[i + 1];
-            if (!nextChild || (!nextChild.isBlock && !nextChild.style.code)) {
-              cn = (cn ? cn + ' ' : (cn = '')) + 'code-last';
-            }
-          }
-          return (
-            <ReactTextNode
-              data-family={EditorFamilyType.Inline}
-              value={child}
-              className={cn}
-              key={child.id}
-            />
-          );
+  let children: JSX.Element | JSX.Element[];
+  if (isEmpty) {
+    children = <br />;
+  } else {
+    children = [];
+    let i = 0;
+    const isHeading =
+      value.style.type === ParagraphStyleType.Heading1 ||
+      value.style.type === ParagraphStyleType.Heading2 ||
+      value.style.type === ParagraphStyleType.Heading3;
+    groupArr(
+      value.children,
+      (inline) => {
+        if (!inline.isBlock && inline.style.link) {
+          return { link: inline.style.link };
         }
+        return null;
+      },
+      (a, b) => a === b || !!(a && b && a.link.href === b.link.href),
+    ).forEach((group) => {
+      const texts = group.items.map((inline) => {
+        switch (inline.type) {
+          case InlineNodeType.Text: {
+            const i_ = i++;
+            if (inline.style.code) {
+              const prevChild = i_ === 0 ? null : value.children[i_ - 1];
+              const nextChild =
+                i_ === value.children.length - 1
+                  ? null
+                  : value.children[i_ + 1];
+              const isFirst =
+                !prevChild || (!prevChild.isBlock && !prevChild.style.code);
+              const isLast =
+                !nextChild || (!nextChild.isBlock && !nextChild.style.code);
+              return (
+                <ReactTextNode
+                  value={inline}
+                  isTable={isTable}
+                  isHeading={isHeading}
+                  isFirstCode={isFirst}
+                  isLastCode={isLast}
+                  key={inline.id}
+                />
+              );
+            }
+            return (
+              <ReactTextNode
+                value={inline}
+                isTable={isTable}
+                isHeading={isHeading}
+                key={inline.id}
+              />
+            );
+          }
+        }
+      });
+      if (group.groupInfo) {
+        (children as JSX.Element[]).push(
+          <a href={group.groupInfo.link.href} key={group.items[0].id}>
+            {texts}
+          </a>,
+        );
+        return;
       }
-    })
-  );
+      (children as JSX.Element[]).push(...texts);
+    });
+  }
+  let style: React.CSSProperties = {
+    textAlign:
+      value.style.align === TextAlign.Left
+        ? 'left'
+        : value.style.align === TextAlign.Right
+        ? 'right'
+        : value.style.align === TextAlign.Center
+        ? 'center'
+        : value.style.align === TextAlign.Justify
+        ? 'justify'
+        : undefined,
+    marginLeft: value.style.indentLevel && `${value.style.indentLevel * 2}em`,
+  };
   switch (value.style.type) {
     case ParagraphStyleType.Default: {
       return (
         <p
+          style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
           data-empty-paragraph={isEmpty}
@@ -485,9 +576,10 @@ function ReactParagraphNode_(
         </p>
       );
     }
-    case ParagraphStyleType.Subtitle: {
+    case ParagraphStyleType.Heading2: {
       return (
         <h2
+          style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
           data-empty-paragraph={isEmpty}
@@ -497,9 +589,10 @@ function ReactParagraphNode_(
         </h2>
       );
     }
-    case ParagraphStyleType.Title: {
+    case ParagraphStyleType.Heading1: {
       return (
         <h1
+          style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
           data-empty-paragraph={isEmpty}
@@ -509,22 +602,23 @@ function ReactParagraphNode_(
         </h1>
       );
     }
-    case ParagraphStyleType.Quote: {
+    case ParagraphStyleType.Heading3: {
       return (
-        <blockquote
+        <h3
+          style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
           data-empty-paragraph={isEmpty}
           data-id={value.id}
         >
           {children}
-        </blockquote>
+        </h3>
       );
     }
-    case ParagraphStyleType.PullQuote: {
+    case ParagraphStyleType.Quote: {
       return (
         <blockquote
-          className="pullquote"
+          style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
           data-empty-paragraph={isEmpty}
@@ -537,6 +631,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.BulletList: {
       return (
         <li
+          style={omit(style, ['marginLeft'])}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
           data-empty-paragraph={isEmpty}
@@ -549,6 +644,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.NumberedList: {
       return (
         <li
+          style={omit(style, ['marginLeft'])}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
           data-empty-paragraph={isEmpty}
@@ -564,51 +660,109 @@ const ReactParagraphNode = memo(ReactParagraphNode_);
 
 function ReactTextNode({
   value,
-  className,
+  isTable,
+  isHeading,
+  isFirstCode,
+  isLastCode,
 }: {
   value: TextNode;
-  className?: string;
+  isTable: boolean;
+  isHeading: boolean;
+  isFirstCode?: boolean;
+  isLastCode?: boolean;
 }): JSX.Element {
-  let text: JSX.Element | string = value.text;
-  if (value.style.bold) {
-    text = <b>{text}</b>;
+  function renderText(
+    textValue: string,
+    isFirst?: boolean,
+    isLast?: boolean,
+    key?: React.Key,
+    start?: number,
+  ): JSX.Element {
+    let text: JSX.Element | string = textValue;
+    if (value.style.bold) {
+      text = <b>{text}</b>;
+    }
+    if (value.style.italic) {
+      text = <i>{text}</i>;
+    }
+    if (value.style.underline) {
+      text = <u>{text}</u>;
+    }
+    if (value.style.strikethrough) {
+      text = <s>{text}</s>;
+    }
+    if (value.style.code) {
+      text = (
+        <code
+          className={[
+            isFirst && isFirstCode && 'code-first',
+            isLast && isLastCode && 'code-last',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+        >
+          {text}
+        </code>
+      );
+    }
+    if (value.style.script === TextScript.Superscript) {
+      text = <sup>{text}</sup>;
+    }
+    if (value.style.script === TextScript.Subscript) {
+      text = <sub>{text}</sub>;
+    }
+    if (typeof text !== 'string' && !Array.isArray(text)) {
+      return cloneElement(text, {
+        className:
+          'inline-text' +
+          (text.props.className ? ' ' + text.props.className : ''),
+        'data-family': EditorFamilyType.Inline,
+        'data-type': InlineNodeType.Text,
+        'data-paragraph-offset-start': start,
+        'data-id': value.id,
+        key,
+      });
+    }
+    return (
+      <span
+        className="inline-text"
+        data-family={EditorFamilyType.Inline}
+        data-type={InlineNodeType.Text}
+        data-paragraph-offset-start={start}
+        data-id={value.id}
+        key={key}
+      >
+        {text}
+      </span>
+    );
   }
-  if (value.style.italic) {
-    text = <i>{text}</i>;
-  }
-  if (value.style.underline) {
-    text = <u>{text}</u>;
-  }
-  if (value.style.strikethrough) {
-    text = <s>{text}</s>;
-  }
-  if (value.style.code) {
-    text = <code>{text}</code>;
-  }
-  if (value.style.script === TextScript.Superscript) {
-    text = <sup>{text}</sup>;
-  }
-  if (value.style.script === TextScript.Subscript) {
-    text = <sub>{text}</sub>;
-  }
-  if (typeof text !== 'string') {
-    return cloneElement(text, {
-      className: 'inline-text' + (className ? ` ${className}` : ''),
-      'data-family': EditorFamilyType.Inline,
-      'data-type': InlineNodeType.Text,
-      'data-id': value.id,
-    });
-  }
-  return (
-    <span
-      className={'inline-text' + (className ? ` ${className}` : '')}
-      data-family={EditorFamilyType.Inline}
-      data-type={InlineNodeType.Text}
-      data-id={value.id}
-    >
-      {text}
-    </span>
-  );
+  // const splitEvery = isHeading ? 16 : 32;
+  // if (isTable && value.text.split(' ').some((seg) => seg.length > splitEvery)) {
+  //   let children: JSX.Element[] = [];
+  //   const splitByRe = value.text.split(/(?=[^\w])|\b/g);
+  //   const split: string[] = [];
+  //   const addText = (text: string): void => {
+  //     if (text.length <= splitEvery) {
+  //       split.push(text);
+  //       return;
+  //     }
+  //     split.push(text.slice(0, splitEvery));
+  //     addText(text.slice(splitEvery));
+  //   };
+  //   splitByRe.forEach(addText);
+  //   children = [renderText(split[0], true, split.length === 1, 0)];
+  //   let start = split[0].length;
+  //   for (let i = 1; i < split.length; i++) {
+  //     const text = split[i];
+  //     children.push(<wbr key={i * 2} />);
+  //     children.push(
+  //       renderText(text, false, i === split.length - 1, i * 2 + 1, start),
+  //     );
+  //     start += text.length;
+  //   }
+  //   return <>{children}</>;
+  // }
+  return renderText(value.text);
 }
 
 function groupArr<T, G>(
@@ -633,9 +787,11 @@ function groupArr<T, G>(
 
 interface ReactEditorValueProps {
   value: EditorValue;
+  isTable: boolean;
 }
 function ReactEditorValue_({
   value,
+  isTable,
   listBlockIdToIdx,
 }: ReactEditorValueProps & {
   listBlockIdToIdx: Record<string, number>;
@@ -649,15 +805,24 @@ function ReactEditorValue_({
         (block.style.type === ParagraphStyleType.BulletList ||
           block.style.type === ParagraphStyleType.NumberedList)
       ) {
-        return { listType: block.style.type, listId: block.style.listId };
+        return {
+          listType: block.style.type,
+          listId: block.style.listId,
+          indent: block.style.indentLevel || 0,
+        };
       }
       return null;
     },
-    (a, b) => a === b || (a !== null && b !== null && a.listId === b.listId),
+    (a, b) =>
+      a === b ||
+      (a !== null &&
+        b !== null &&
+        a.listId === b.listId &&
+        a.indent === b.indent),
   ).forEach((group) => {
     const { groupInfo } = group;
     if (groupInfo !== null) {
-      const { listId, listType } = groupInfo;
+      const { listType, indent } = groupInfo;
       const items = group.items as (ParagraphNode & {
         style: BulletListParagraphStyle | NumberedListParagraphStyle;
       })[];
@@ -670,6 +835,7 @@ function ReactEditorValue_({
                   style: NumberedListParagraphStyle;
                 }
               }
+              isTable={isTable}
               listIndex={listBlockIdToIdx[block.id]}
               key={block.id}
             />
@@ -682,18 +848,30 @@ function ReactEditorValue_({
                 style: BulletListParagraphStyle;
               }
             }
+            isTable={isTable}
             key={block.id}
           />
         );
       });
       if (listType === ParagraphStyleType.NumberedList) {
         children.push(
-          <ol key={items[0].id} start={listBlockIdToIdx[items[0].id] + 1}>
+          <ol
+            key={items[0].id}
+            start={listBlockIdToIdx[items[0].id] + 1}
+            style={{ paddingLeft: `${(indent + 1) * 2}em` }}
+          >
             {listNodes}
           </ol>,
         );
       } else {
-        children.push(<ul key={items[0].id}>{listNodes}</ul>);
+        children.push(
+          <ul
+            key={items[0].id}
+            style={{ paddingLeft: `${(indent + 1) * 2}em` }}
+          >
+            {listNodes}
+          </ul>,
+        );
       }
       return;
     }
@@ -715,6 +893,7 @@ function ReactEditorValue_({
                   style: Exclude<ParagraphStyle, NumberedListParagraphStyle>;
                 }
               }
+              isTable={isTable}
               key={block.id}
             />,
           );
@@ -730,10 +909,17 @@ function ReactEditorValue_({
   );
 }
 const ReactEditorValue_m = memo(ReactEditorValue_);
-function ReactEditorValue({ value }: ReactEditorValueProps): JSX.Element {
+function ReactEditorValue({
+  value,
+  isTable,
+}: ReactEditorValueProps): JSX.Element {
   const listBlockIdToIdx = useContext(NumberedListIndicesContext);
   return (
-    <ReactEditorValue_m value={value} listBlockIdToIdx={listBlockIdToIdx} />
+    <ReactEditorValue_m
+      value={value}
+      isTable={isTable}
+      listBlockIdToIdx={listBlockIdToIdx}
+    />
   );
 }
 
@@ -871,6 +1057,10 @@ function findPoint(
   }
   const nearestDocNodeType = nearestDocNode.getAttribute('data-type')!;
   if (nearestDocNodeType === InlineNodeType.Text) {
+    const startAttr = nearestDocNode.getAttribute(
+      'data-paragraph-offset-start',
+    );
+    const start = startAttr ? Number(startAttr) : 0;
     const textId = nearestDocNode.getAttribute('data-id')!;
     const nearestParagraphNode = nearestDocNode.closest(
       `[data-type="${BlockNodeType.Paragraph}"]`,
@@ -917,7 +1107,7 @@ function findPoint(
       point: {
         type: BlockSelectionPointType.Paragraph,
         blockId: paragraphId,
-        offset,
+        offset: offset + start,
       },
       editorId,
     };
@@ -1342,13 +1532,14 @@ function isCollapsed(selection: Selection): boolean {
 }
 
 function isTextStyleSame(a: TextStyle, b: TextStyle): boolean {
-  return (
+  return !!(
     a.bold === b.bold &&
     a.italic === b.italic &&
     a.underline === b.underline &&
     a.code === b.code &&
     a.strikethrough === b.strikethrough &&
-    a.script === b.script
+    a.script === b.script &&
+    ((!a.link && !b.link) || (a.link && b.link && a.link.href === b.link.href))
   );
 }
 
@@ -1934,6 +2125,8 @@ function mapNodes(
     return makeParagraph(
       para.children.map((child) => {
         if (child.isBlock) {
+          // TODO
+          // @ts-expect-error
           return mapNonTextInline(child);
         } else {
           return makeText(child.text, mapTextStyle(child.style), child.id);
@@ -2610,16 +2803,31 @@ function makeDOMBlockPoint(
           let start = end;
           end += inlineNode.isBlock ? 1 : inlineNode.text.length;
           if (start < point.offset && point.offset <= end) {
-            const node = editableElement.querySelector(
+            const nodes = editableElement.querySelectorAll(
               `[data-id="${inlineNode.id}"]`,
             );
-            if (!node) {
+            if (nodes.length === 0) {
               throw new Error();
             }
-            return {
-              stop: true,
-              data: getTextNodeAndOffset(node, point.offset - start),
-            };
+            for (let i = 0; i < nodes.length; i++) {
+              const node = nodes[i];
+              let startAttr = node.getAttribute('data-paragraph-offset-start');
+              let textStart = startAttr ? Number(startAttr) : 0;
+              let textEnd = textStart + node.textContent!.length;
+              if (
+                textStart <= point.offset - start &&
+                point.offset - start <= textEnd
+              ) {
+                return {
+                  stop: true,
+                  data: getTextNodeAndOffset(
+                    node,
+                    point.offset - textStart - start,
+                  ),
+                };
+              }
+            }
+            throw new Error();
           }
         }
         throw new Error();
@@ -2932,6 +3140,14 @@ function hasCommandModifier(event: CompatibleKeyboardEvent): boolean {
   return isApple ? event.metaKey && !event.altKey : hasControlKey(event);
 }
 
+function hasCommandOptionKey(event: CompatibleKeyboardEvent): boolean {
+  return (
+    (isApple
+      ? event.metaKey && !event.ctrlKey
+      : event.ctrlKey && !event.metaKey) && event.altKey
+  );
+}
+
 function hasNoModifiers(event: CompatibleKeyboardEvent): boolean {
   return !event.ctrlKey && !event.altKey && !event.metaKey;
 }
@@ -2942,25 +3158,34 @@ function hasKeyCode(
   return (event) => event.keyCode === keyCode;
 }
 
-const B = 66;
-const I = 73;
-const U = 85;
-const J = 74;
-const X = 88;
-const Z = 90;
-const Y = 89;
-const H = 72;
+const BACKSPACE = 8;
 const ONE = 49;
 const TWO = 50;
-const SEVEN = 55;
+const THREE = 51;
 const EIGHT = 56;
 const NINE = 57;
+const B = 66;
+const E = 69;
+const H = 72;
+const I = 73;
+const J = 74;
+const L = 76;
+const M = 77;
+const R = 82;
+const U = 85;
+const X = 88;
+const Y = 89;
+const Z = 90;
 const FULLSTOP = 190;
 const COMMA = 188;
 const QUOTE = 222;
 const BACKSLASH = 220;
-const BACKSPACE = 8;
 
+const isAlignLeft = allPass([hasControlKey, hasKeyCode(L)]);
+const isAlignCenter = allPass([hasControlKey, hasKeyCode(E)]);
+const isAlignRight = allPass([hasControlKey, hasKeyCode(R)]);
+const isIndent = allPass([hasControlKey, not(hasShiftKey), hasKeyCode(M)]);
+const isOutdent = allPass([hasControlKey, hasShiftKey, hasKeyCode(M)]);
 const isDeleteBackward = anyPass([
   allPass([
     (event: CompatibleKeyboardEvent) =>
@@ -3004,21 +3229,12 @@ const isSubscript = allPass([
   hasShiftKey,
   hasKeyCode(COMMA),
 ]);
-const isTitle = allPass([hasCommandModifier, hasShiftKey, hasKeyCode(ONE)]);
-const isSubtitle = allPass([hasCommandModifier, hasShiftKey, hasKeyCode(TWO)]);
-const isCodeBlock = allPass([
-  hasCommandModifier,
-  hasShiftKey,
-  hasKeyCode(SEVEN),
-]);
+const isHeading1 = allPass([hasCommandOptionKey, hasKeyCode(ONE)]);
+const isHeading2 = allPass([hasCommandOptionKey, hasKeyCode(TWO)]);
+const isHeading3 = allPass([hasCommandOptionKey, hasKeyCode(THREE)]);
 const isQuote = allPass([
   hasCommandModifier,
   not(hasShiftKey),
-  hasKeyCode(QUOTE),
-]);
-const isPullQuote = allPass([
-  hasCommandModifier,
-  hasShiftKey,
   hasKeyCode(QUOTE),
 ]);
 const isBulletList = allPass([
@@ -3075,47 +3291,70 @@ function anyTextMatches(
   });
 }
 
-function isInlineActiveStyle(
+function mapInlineStyleIfActive<T>(
   value: EditorValue,
   selection: Selection,
   condition: (style: TextStyle) => boolean,
-): boolean {
+  getStyle: (styles: TextStyle[]) => T,
+  countEdge = true,
+): T | undefined {
   if (isCollapsed(selection)) {
     if (selection.type !== SelectionType.Block) {
-      return false;
+      return undefined;
     }
     const point = selection.start;
     if (point.type !== BlockSelectionPointType.Paragraph) {
-      return false;
+      return undefined;
     }
-    return walkEditorValues<boolean>(
+    return walkEditorValues<T | undefined>(
       value,
       (subValue, _data, _ids) => {
         if (subValue.id !== selection.editorId) {
           return {
             stop: false,
-            data: false,
+            data: undefined,
           };
         }
         const para = subValue.blocks.find(
           (block) => block.id === point.blockId,
         ) as ParagraphNode;
         const start = removeTextFromParagraph(para, point.offset, Infinity);
+        if (
+          !countEdge &&
+          (point.offset === 0 ||
+            start.children[start.children.length - 1].text.length ===
+              para.children.find(
+                (inline) =>
+                  inline.id === start.children[start.children.length - 1].id,
+              )!.text.length)
+        ) {
+          return {
+            stop: true,
+            data: undefined,
+          };
+        }
         return {
           stop: true,
           data: condition(
             (start.children[start.children.length - 1] as TextNode).style,
-          ),
+          )
+            ? getStyle([
+                (start.children[start.children.length - 1] as TextNode).style,
+              ])
+            : undefined,
         };
       },
-      false,
+      undefined,
       false,
     ).retValue;
   }
-  return !anyTextMatches(
-    extractSelection(value, selection),
-    (text) => !condition(text.style),
-  );
+  let styles: TextStyle[] = [];
+  return !anyTextMatches(extractSelection(value, selection), (text) => {
+    styles.push(text.style);
+    return !condition(text.style);
+  })
+    ? getStyle(styles)
+    : undefined;
 }
 
 function getSelectionTextStyle(
@@ -3123,42 +3362,65 @@ function getSelectionTextStyle(
   selection: Selection,
 ): TextStyle {
   return {
-    bold: isInlineActiveStyle(value, selection, (style) => !!style.bold)
-      ? true
-      : undefined,
-    code: isInlineActiveStyle(value, selection, (style) => !!style.code)
-      ? true
-      : undefined,
-    italic: isInlineActiveStyle(value, selection, (style) => !!style.italic)
-      ? true
-      : undefined,
-    script: isInlineActiveStyle(
+    bold: mapInlineStyleIfActive(
+      value,
+      selection,
+      (style) => !!style.bold,
+      () => true,
+    ),
+    code: mapInlineStyleIfActive(
+      value,
+      selection,
+      (style) => !!style.code,
+      () => true,
+    ),
+    italic: mapInlineStyleIfActive(
+      value,
+      selection,
+      (style) => !!style.italic,
+      () => true,
+    ),
+    script: mapInlineStyleIfActive(
       value,
       selection,
       (style) => style.script === TextScript.Superscript,
+      () => true,
     )
       ? TextScript.Superscript
-      : isInlineActiveStyle(
+      : mapInlineStyleIfActive(
           value,
           selection,
           (style) => style.script === TextScript.Subscript,
+          () => true,
         )
       ? TextScript.Subscript
       : undefined,
-    strikethrough: isInlineActiveStyle(
+    strikethrough: mapInlineStyleIfActive(
       value,
       selection,
       (style) => !!style.strikethrough,
+      () => true,
     )
       ? true
       : undefined,
-    underline: isInlineActiveStyle(
+    underline: mapInlineStyleIfActive(
       value,
       selection,
       (style) => !!style.underline,
+      () => true,
     )
       ? true
       : undefined,
+    link: mapInlineStyleIfActive(
+      value,
+      selection,
+      (style) => !!style.link,
+      (styles) =>
+        styles.every((style) => style.link === styles[0].link)
+          ? styles[0].link
+          : undefined,
+      false,
+    ),
   };
 }
 
@@ -3564,12 +3826,11 @@ type Command =
       origin?: string;
     }
   | {
-      type: CommandType.ClearFormat | CommandType.Redo | CommandType.Undo;
-      selection: Selection;
-      origin?: string;
-    }
-  | {
-      type: CommandType.DeleteBackwardKey;
+      type:
+        | CommandType.ClearFormat
+        | CommandType.Redo
+        | CommandType.Undo
+        | CommandType.DeleteBackwardKey;
       selection: Selection;
       origin?: string;
     };
@@ -3707,48 +3968,77 @@ const cmds = {
       },
     ],
   },
-  title: {
-    isKey: isTitle,
+  'heading 1': {
+    isKey: isHeading1,
     icon: {
       isActive: (c) =>
         isParagraphStyleActive(
           c.value,
           c.selection!,
-          (style) => style.type === ParagraphStyleType.Title,
+          (style) => style.type === ParagraphStyleType.Heading1,
         ),
-      Icon: TitleIcon,
+      Icon: Heading1Icon,
     },
     getCmds: (selection) => [
       {
         type: CommandType.BlockFormat,
         selection,
-        condition: (style) => style.type === ParagraphStyleType.Title,
+        condition: (style) => style.type === ParagraphStyleType.Heading1,
         transform: (style, active) => ({
-          type: active ? ParagraphStyleType.Default : ParagraphStyleType.Title,
+          ...style,
+          type: active
+            ? ParagraphStyleType.Default
+            : ParagraphStyleType.Heading1,
         }),
       },
     ],
   },
-  subtitle: {
-    isKey: isSubtitle,
+  'heading 2': {
+    isKey: isHeading2,
     icon: {
       isActive: (c) =>
         isParagraphStyleActive(
           c.value,
           c.selection!,
-          (style) => style.type === ParagraphStyleType.Subtitle,
+          (style) => style.type === ParagraphStyleType.Heading2,
         ),
-      Icon: SubtitleIcon,
+      Icon: Heading2Icon,
     },
     getCmds: (selection) => [
       {
         type: CommandType.BlockFormat,
         selection,
-        condition: (style) => style.type === ParagraphStyleType.Subtitle,
+        condition: (style) => style.type === ParagraphStyleType.Heading2,
         transform: (style, active) => ({
+          ...style,
           type: active
             ? ParagraphStyleType.Default
-            : ParagraphStyleType.Subtitle,
+            : ParagraphStyleType.Heading2,
+        }),
+      },
+    ],
+  },
+  'heading 3': {
+    isKey: isHeading3,
+    icon: {
+      isActive: (c) =>
+        isParagraphStyleActive(
+          c.value,
+          c.selection!,
+          (style) => style.type === ParagraphStyleType.Heading3,
+        ),
+      Icon: Heading2Icon,
+    },
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: (style) => style.type === ParagraphStyleType.Heading3,
+        transform: (style, active) => ({
+          ...style,
+          type: active
+            ? ParagraphStyleType.Default
+            : ParagraphStyleType.Heading3,
         }),
       },
     ],
@@ -3770,31 +4060,78 @@ const cmds = {
         selection,
         condition: (style) => style.type === ParagraphStyleType.Quote,
         transform: (style, active) => ({
+          ...style,
           type: active ? ParagraphStyleType.Default : ParagraphStyleType.Quote,
         }),
       },
     ],
   },
-  'pull quote': {
-    isKey: isPullQuote,
-    icon: {
-      isActive: (c) =>
-        isParagraphStyleActive(
-          c.value,
-          c.selection!,
-          (style) => style.type === ParagraphStyleType.PullQuote,
-        ),
-      Icon: PullQuoteIcon,
-    },
+  'align left': {
+    isKey: isAlignLeft,
     getCmds: (selection) => [
       {
         type: CommandType.BlockFormat,
         selection,
-        condition: (style) => style.type === ParagraphStyleType.PullQuote,
+        condition: (style) => !style.align || style.align === TextAlign.Left,
         transform: (style, active) => ({
-          type: active
-            ? ParagraphStyleType.Default
-            : ParagraphStyleType.PullQuote,
+          ...style,
+          align: active ? undefined : style.align,
+        }),
+      },
+    ],
+  },
+  'align center': {
+    isKey: isAlignCenter,
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: (style) => style.align === TextAlign.Center,
+        transform: (style, active) => ({
+          ...style,
+          align: active ? undefined : TextAlign.Center,
+        }),
+      },
+    ],
+  },
+  'align right': {
+    isKey: isAlignRight,
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: (style) => style.align === TextAlign.Right,
+        transform: (style, active) => ({
+          ...style,
+          align: active ? undefined : TextAlign.Right,
+        }),
+      },
+    ],
+  },
+  indent: {
+    isKey: isIndent,
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: () => false,
+        transform: (style) => ({
+          ...style,
+          indentLevel: Math.min((style.indentLevel || 0) + 1, MAX_INDENT),
+        }),
+      },
+    ],
+  },
+  outdent: {
+    isKey: isOutdent,
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: () => false,
+        transform: (style) => ({
+          ...style,
+          indentLevel: style.indentLevel ? style.indentLevel - 1 : undefined,
         }),
       },
     ],
@@ -3825,8 +4162,9 @@ const cmds = {
           condition: (style) => style.type === ParagraphStyleType.BulletList,
           transform: (style, active) =>
             active
-              ? { type: ParagraphStyleType.Default }
+              ? { ...style, type: ParagraphStyleType.Default }
               : {
+                  ...style,
                   type: ParagraphStyleType.BulletList,
                   listId: getNewId(),
                 },
@@ -3860,8 +4198,9 @@ const cmds = {
           condition: (style) => style.type === ParagraphStyleType.NumberedList,
           transform: (style, active) =>
             active
-              ? { type: ParagraphStyleType.Default }
+              ? { ...style, type: ParagraphStyleType.Default }
               : {
+                  ...style,
                   type: ParagraphStyleType.NumberedList,
                   listId: getNewId(),
                 },
@@ -3915,9 +4254,6 @@ const cmds = {
     getCmds: (selection: Selection, makeId: () => string) => Command[];
   };
 };
-
-const useIsomorphicLayoutEffect =
-  typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 function useCustomCompareMemo<T, TDependencyList extends React.DependencyList>(
   factory: () => T,
@@ -4244,6 +4580,58 @@ function getStyle(
   return element.style[name];
 }
 
+const sanitizeUrl = (() => {
+  // https://github.com/braintree/sanitize-url/blob/main/src/index.ts.
+
+  const invalidProtocolRegex = /^([^\w]*)(javascript|data|vbscript)/im;
+  const htmlEntitiesRegex = /&#(\w+)(^\w|;)?/g;
+  const htmlCtrlEntityRegex = /&(newline|tab);/gi;
+  const ctrlCharactersRegex =
+    /[\u0000-\u001F\u007F-\u009F\u2000-\u200D\uFEFF]/gim;
+  const urlSchemeRegex = /^.+(:|&colon;)/gim;
+  const relativeFirstCharacters = ['.', '/'];
+
+  function isRelativeUrlWithoutProtocol(url: string): boolean {
+    return relativeFirstCharacters.indexOf(url[0]) > -1;
+  }
+
+  // adapted from https://stackoverflow.com/a/29824550/2601552
+  function decodeHtmlCharacters(str: string) {
+    return str.replace(htmlEntitiesRegex, (match, dec) => {
+      return String.fromCharCode(dec);
+    });
+  }
+
+  return function sanitizeUrl(url?: string): string {
+    const sanitizedUrl = decodeHtmlCharacters(url || '')
+      .replace(htmlCtrlEntityRegex, '')
+      .replace(ctrlCharactersRegex, '')
+      .trim();
+
+    if (!sanitizedUrl) {
+      return 'about:blank';
+    }
+
+    if (isRelativeUrlWithoutProtocol(sanitizedUrl)) {
+      return sanitizedUrl;
+    }
+
+    const urlSchemeParseResults = sanitizedUrl.match(urlSchemeRegex);
+
+    if (!urlSchemeParseResults) {
+      return sanitizedUrl;
+    }
+
+    const urlScheme = urlSchemeParseResults[0];
+
+    if (invalidProtocolRegex.test(urlScheme)) {
+      return 'about:blank';
+    }
+
+    return sanitizedUrl;
+  };
+})();
+
 function getTextStylesFromElement(
   element: HTMLElement,
   parents: HTMLElement[],
@@ -4252,6 +4640,25 @@ function getTextStylesFromElement(
   const fontStyle = getStyle('fontStyle', element, parents);
   const textDecorationLine = getStyle('textDecorationLine', element, parents);
   const verticalAlign = getStyle('verticalAlign', element, parents);
+
+  const isValidUrl = (urlString: string) => {
+    const urlPattern = new RegExp(
+      '^(https?:\\/\\/)?' + // validate protocol
+        '((([a-z\\d]([a-z\\d-]*[a-z\\d])*)\\.)+[a-z]{2,}|' + // validate domain name
+        '((\\d{1,3}\\.){3}\\d{1,3}))' + // validate OR ip (v4) address
+        '(\\:\\d+)?(\\/[-a-z\\d%_.~+]*)*' + // validate port and path
+        '(\\?[;&a-z\\d%_.~+=-]*)?' + // validate query string
+        '(\\#[-a-z\\d_]*)?$',
+      'i',
+    ); // validate fragment locator
+    return !!urlPattern.test(urlString);
+  };
+  const anchor = parents.find(
+    (el) =>
+      el.tagName.toLowerCase() === 'a' &&
+      (el as HTMLAnchorElement).href &&
+      sanitizeUrl((el as HTMLAnchorElement).href) !== 'about:blank',
+  );
 
   return {
     bold: Number(fontWeight) >= 600 ? true : undefined,
@@ -4268,6 +4675,9 @@ function getTextStylesFromElement(
     code: parents.some((el) => el.tagName.toLowerCase() === 'code')
       ? true
       : undefined,
+    link: anchor && {
+      href: sanitizeUrl((anchor as HTMLAnchorElement).href),
+    },
   };
 }
 
@@ -4285,6 +4695,12 @@ function convertFromElToEditorValue(
     {
       acceptNode(node) {
         if (node.parentNode!.nodeName.toLowerCase() === 'table') {
+          return NodeFilter.FILTER_REJECT;
+        }
+        if (
+          node instanceof HTMLElement &&
+          (node.style.appearance === 'none' || node.style.display === 'none')
+        ) {
           return NodeFilter.FILTER_REJECT;
         }
         return NodeFilter.FILTER_ACCEPT;
@@ -4322,33 +4738,97 @@ function convertFromElToEditorValue(
     }
     return idCache.get(value)!;
   }
-  function makeParagraphFromNode(node: Node): ParagraphNode {
-    let blockParents: HTMLElement[] = [];
+  function getBlockParents(node: Node): HTMLElement[] {
     let parent: HTMLElement | null = node as HTMLElement;
+    let parents: HTMLElement[] = [];
     while ((parent = parent!.parentElement) && parent !== el) {
-      if (
-        isBlock(parent) && [
-          'h1',
-          'h2',
-          'h3',
-          'h4',
-          'h5',
-          'h6',
-          'ol',
-          'li',
-          'blockquote',
-        ]
-      ) {
-        blockParents.push(parent);
+      if (isBlock(parent)) {
+        parents.push(parent);
       }
     }
+    return parents;
+  }
+  const liElCache = new Set<HTMLElement>();
+  function isLiParagraphAdded(liEl: HTMLElement): boolean {
+    if (liElCache.has(liEl)) {
+      return true;
+    }
+    liElCache.add(liEl);
+    return false;
+  }
+  function makeParagraphFromNode(node: Node): ParagraphNode {
+    let parents: HTMLElement[] = [];
+    let parent: HTMLElement | null = node as HTMLElement;
+    while ((parent = parent!.parentElement) && parent !== el) {
+      parents.push(parent);
+    }
+    const blockParents = getBlockParents(node);
+    const nearestEl = node instanceof HTMLElement ? node : node.parentElement!;
+    const textAlign = getStyle('textAlign', nearestEl, parents);
+    const paraStyleBase: ParagraphStyleBase = {
+      align:
+        textAlign === 'left'
+          ? TextAlign.Left
+          : textAlign === 'center'
+          ? TextAlign.Center
+          : textAlign === 'right'
+          ? TextAlign.Right
+          : textAlign === 'justify'
+          ? TextAlign.Justify
+          : undefined,
+    };
     if (blockParents.length === 0) {
-      return makeDefaultParagraph([], makeId());
+      return makeDefaultParagraph([], makeId(), paraStyleBase);
+    }
+    function getFirstConvertibleBlockEl(blockEls: HTMLElement[]) {
+      return blockEls.find((blockEl) =>
+        ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote'].includes(
+          blockEl.tagName.toLowerCase(),
+        ),
+      );
+    }
+    function makeNonListBlock(blockEl?: HTMLElement): ParagraphNode {
+      if (blockEl) {
+        if (blockEl.tagName.toLowerCase().startsWith('h')) {
+          const n = Number(blockEl.tagName.toLowerCase()[1]);
+          if (n === 1) {
+            return makeHeading1Paragraph([], makeId(), paraStyleBase);
+          } else if (n === 2 || n === 3) {
+            return makeHeading2Paragraph([], makeId(), paraStyleBase);
+          } else if (n === 4 || n === 5 || n === 6) {
+            return makeHeading3Paragraph([], makeId(), paraStyleBase);
+          }
+        }
+        if (blockEl.tagName.toLowerCase().startsWith('blockquote')) {
+          return makeQuoteParagraph([], makeId(), paraStyleBase);
+        }
+      }
+      return makeDefaultParagraph([], makeId(), paraStyleBase);
     }
     const firstLiIdx = blockParents.findIndex(
       (el) => el.tagName.toLowerCase() === 'li',
     );
     if (firstLiIdx !== -1) {
+      paraStyleBase.indentLevel =
+        Math.max(
+          Math.min(
+            blockParents
+              .slice(firstLiIdx + 1)
+              .filter(
+                (el) =>
+                  el.tagName.toLowerCase() === 'ul' ||
+                  el.tagName.toLowerCase() === 'ol',
+              ).length - 1,
+            MAX_INDENT,
+          ),
+          0,
+        ) || undefined;
+      if (isLiParagraphAdded(blockParents[firstLiIdx])) {
+        paraStyleBase.indentLevel = (paraStyleBase.indentLevel || 0) + 1;
+        return makeNonListBlock(
+          getFirstConvertibleBlockEl(blockParents.slice(0, firstLiIdx)),
+        );
+      }
       const ulIdx = blockParents
         .slice(firstLiIdx + 1)
         .findIndex((el) => el.tagName.toLowerCase() === 'ul');
@@ -4361,6 +4841,7 @@ function convertFromElToEditorValue(
             [],
             makeIdCached(blockParents[olIdx + firstLiIdx + 1]),
             makeId(),
+            paraStyleBase,
           );
         }
       }
@@ -4370,20 +4851,10 @@ function convertFromElToEditorValue(
           ? makeIdCached(blockParents[ulIdx + firstLiIdx + 1])
           : makeId(),
         makeId(),
+        paraStyleBase,
       );
     }
-    if (blockParents[0].tagName.toLowerCase().startsWith('h')) {
-      const n = Number(blockParents[0].tagName.toLowerCase()[1]);
-      if (n < 3) {
-        return makeTitleParagraph([], makeId());
-      } else {
-        return makeSubtitleParagraph([], makeId());
-      }
-    }
-    if (blockParents[0].tagName.toLowerCase().startsWith('blockquote')) {
-      return makeQuoteParagraph([], makeId());
-    }
-    return makeDefaultParagraph([], makeId());
+    return makeNonListBlock(getFirstConvertibleBlockEl(blockParents));
   }
   let prevBlockParent: HTMLElement | null | undefined = null;
   while ((node = walker.nextNode())) {
@@ -4392,7 +4863,7 @@ function convertFromElToEditorValue(
     while ((temp = temp!.parentElement)) {
       parentElements.push(temp);
     }
-    if (isBlock(node)) {
+    if (isBlock(node) || node.nodeName.toLowerCase() === 'img') {
       const blockEl = node as Element;
       if (
         blockEl.tagName.toLowerCase() === 'img' &&
@@ -4533,10 +5004,6 @@ function ReactEditor({
     editorRef.current!.focus();
 
     const native = window.getSelection()!;
-
-    const { rangeCount } = native;
-
-    const current = !!rangeCount && native.getRangeAt(0);
     const range = makeDOMRange(
       newSelection,
       editorCtrl.current.value,
@@ -4575,9 +5042,11 @@ function ReactEditor({
     newSelection: Selection,
     newTextStyle: TextStyle,
     action: PushStateAction,
+    merge = false,
   ): EditorController {
     let undos = curEditorCtrl.undos;
     if (
+      !merge &&
       action !== PushStateAction.Selection &&
       (action === PushStateAction.Unique || curEditorCtrl.lastAction !== action)
     ) {
@@ -4693,6 +5162,7 @@ function ReactEditor({
               return;
             }
             let insertValue: EditorValue;
+            let mergeHistory = dropValue !== null;
             if (dropValue !== null) {
               insertValue = dropValue;
               dropValue = null;
@@ -4730,6 +5200,7 @@ function ReactEditor({
               newSelection,
               newTextStyle,
               action,
+              mergeHistory,
             );
             mapSelectionFns.push(edit.mapSelection);
             break;
@@ -4969,8 +5440,10 @@ function ReactEditor({
             if (
               style.type === ParagraphStyleType.BulletList ||
               style.type === ParagraphStyleType.NumberedList ||
-              style.type === ParagraphStyleType.PullQuote ||
-              style.type === ParagraphStyleType.Quote
+              style.type === ParagraphStyleType.Quote ||
+              style.hangingIndent ||
+              style.indentLevel ||
+              (style.align && style.align !== TextAlign.Left)
             ) {
               return {
                 stop: true,
@@ -4978,7 +5451,77 @@ function ReactEditor({
                 newValue: makeEditorValue(
                   subValue.blocks.map((block) => {
                     if (block.id === point.blockId) {
-                      return makeDefaultParagraph(para.children, para.id);
+                      if (
+                        style.type === ParagraphStyleType.BulletList ||
+                        style.type === ParagraphStyleType.NumberedList
+                      ) {
+                        return makeDefaultParagraph(para.children, para.id, {
+                          ...omit(para.style, ['type']),
+                          indentLevel: Math.min(
+                            MAX_INDENT,
+                            (para.style.indentLevel || 0) + 1,
+                          ),
+                        });
+                      }
+                      if (style.type === ParagraphStyleType.Quote) {
+                        return makeDefaultParagraph(
+                          para.children,
+                          para.id,
+                          omit(para.style, ['type']),
+                        );
+                      }
+                      if (style.hangingIndent) {
+                        return makeParagraph(
+                          para.children,
+                          omit(
+                            para.style as Exclude<
+                              ParagraphStyle,
+                              {
+                                type:
+                                  | ParagraphStyleType.BulletList
+                                  | ParagraphStyleType.NumberedList
+                                  | ParagraphStyleType.Quote;
+                              }
+                            >,
+                            ['hangingIndent'],
+                          ),
+                          para.id,
+                        );
+                      }
+                      if (style.indentLevel) {
+                        return makeParagraph(
+                          para.children,
+                          omit(
+                            para.style as Exclude<
+                              ParagraphStyle,
+                              {
+                                type:
+                                  | ParagraphStyleType.BulletList
+                                  | ParagraphStyleType.NumberedList
+                                  | ParagraphStyleType.Quote;
+                              }
+                            >,
+                            ['indentLevel'],
+                          ),
+                          para.id,
+                        );
+                      }
+                      return makeParagraph(
+                        para.children,
+                        omit(
+                          para.style as Exclude<
+                            ParagraphStyle,
+                            {
+                              type:
+                                | ParagraphStyleType.BulletList
+                                | ParagraphStyleType.NumberedList
+                                | ParagraphStyleType.Quote;
+                            }
+                          >,
+                          ['align'],
+                        ),
+                        para.id,
+                      );
                     }
                     return block;
                   }),
@@ -5293,7 +5836,7 @@ function ReactEditor({
                   <NumberedListIndicesContext.Provider
                     value={getListBlockIdToIdx(value)}
                   >
-                    <ReactEditorValue value={curValue} />
+                    <ReactEditorValue isTable={false} value={curValue} />
                   </NumberedListIndicesContext.Provider>
                 </>,
               ),
@@ -5592,10 +6135,14 @@ function ReactEditor({
         contentEditable={isClient}
         suppressContentEditableWarning
         ref={editorRef}
+        className="editor"
       >
         <SelectedEditorsContext.Provider value={selectedEditors}>
           <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
-            <ReactEditorValue value={editorCtrl.current.value} />
+            <ReactEditorValue
+              isTable={false}
+              value={editorCtrl.current.value}
+            />
           </NumberedListIndicesContext.Provider>
         </SelectedEditorsContext.Provider>
       </div>
@@ -5739,7 +6286,7 @@ function SubscriptIcon(props: ToolbarIconProps): JSX.Element {
   );
 }
 
-function TitleIcon(props: ToolbarIconProps): JSX.Element {
+function Heading1Icon(props: ToolbarIconProps): JSX.Element {
   return (
     <ToolbarIcon
       version="1.1"
@@ -5753,7 +6300,7 @@ function TitleIcon(props: ToolbarIconProps): JSX.Element {
   );
 }
 
-function SubtitleIcon(props: ToolbarIconProps): JSX.Element {
+function Heading2Icon(props: ToolbarIconProps): JSX.Element {
   return (
     <ToolbarIcon
       version="1.1"
@@ -5791,20 +6338,6 @@ function QuoteIcon(props: ToolbarIconProps): JSX.Element {
       {...props}
     >
       <path d="M448 296c0 66.3-53.7 120-120 120h-8c-17.7 0-32-14.3-32-32s14.3-32 32-32h8c30.9 0 56-25.1 56-56v-8H320c-35.3 0-64-28.7-64-64V160c0-35.3 28.7-64 64-64h64c35.3 0 64 28.7 64 64v32 32 72zm-256 0c0 66.3-53.7 120-120 120H64c-17.7 0-32-14.3-32-32s14.3-32 32-32h8c30.9 0 56-25.1 56-56v-8H64c-35.3 0-64-28.7-64-64V160c0-35.3 28.7-64 64-64h64c35.3 0 64 28.7 64 64v32 32 72z" />
-    </ToolbarIcon>
-  );
-}
-
-function PullQuoteIcon(props: ToolbarIconProps): JSX.Element {
-  return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 512 512"
-      {...props}
-    >
-      <path d="M470.6 278.6c12.5-12.5 12.5-32.8 0-45.3l-160-160c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L402.7 256 265.4 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l160-160zm-352 160l160-160c12.5-12.5 12.5-32.8 0-45.3l-160-160c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L210.7 256 73.4 393.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0z" />
     </ToolbarIcon>
   );
 }
@@ -5855,11 +6388,15 @@ export default function Home() {
   }
 
   // prettier-ignore
-  const initialValue = makeEditorValue([makeTitleParagraph([makeDefaultText("This is the title",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id()),],id()),id()),],id()),],2,id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id())],id()),id()),],id()),],2,id()),makeNumberedListParagraph([makeDefaultText("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",id()),],id(),id()),makeDefaultParagraph([makeDefaultText("",id())],id()),makeDefaultParagraph([makeDefaultText("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",id()),],id())],id())
+  const initialValue = makeEditorValue([makeHeading1Paragraph([makeDefaultText("This is the title",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id()),],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("1",id())],id()),makeTable([makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Song",{bold:true},id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeText("Scrobbles",{bold:true},id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Nikes",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id()),],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id()),],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),makeDefaultParagraph([makeDefaultText("223",id()),],id()),],id()),id()),],id()),],2,id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("73",id())],id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id()),],id()),id()),],id()),],2,id()),],id()),id()),],id()),makeTableRow([makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("Valuable Pain",id())],id()),],id()),id()),makeTableCell(makeEditorValue([makeDefaultParagraph([makeDefaultText("223",id())],id())],id()),id()),],id()),],2,id()),makeNumberedListParagraph([makeDefaultText("Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.",id()),],id(),id()),makeDefaultParagraph([makeDefaultText("",id())],id()),makeDefaultParagraph([makeDefaultText("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",id()),],id())],id())
 
   return (
-    <main className={['markdown-body', roboto.className].join(' ')}>
-      <ReactEditor initialValue={initialValue} makeId={id} />
-    </main>
+    <div className={['page', roboto.className].join(' ')}>
+      <div className="page__inner">
+        <main className="editor-wrapper">
+          <ReactEditor initialValue={initialValue} makeId={id} />
+        </main>
+      </div>
+    </div>
   );
 }
