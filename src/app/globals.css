@@ -118,6 +118,10 @@ table {
   border-spacing: 0;
 }
 
+html {
+  font-size: 16px;
+}
+
 i {
   font-style: italic;
 }
@@ -137,7 +141,7 @@ i {
   position: relative;
   display: inline-block;
   color: #fff;
-  font-size: 16px;
+  font-size: 100%;
   font-weight: 700;
 }
 
@@ -179,8 +183,8 @@ i {
 .tooltip__gap {
   position: absolute;
   width: 100%;
-  height: 20px;
-  bottom: -20px;
+  height: 1.25em;
+  bottom: -1.25em;
 }
 
 .toolbar {
@@ -196,13 +200,13 @@ i {
   cursor: pointer;
   fill: #444;
   display: inline-block;
-  margin: 0 6px;
+  margin: 0 0.3em;
   padding: 0.4em;
   box-sizing: initial;
   border-radius: 2px;
   z-index: 0;
-  width: 16px;
-  height: 16px;
+  width: 1em;
+  height: 1em;
 }
 .tooltip__wrapper:first-child .toolbarIcon {
   margin-left: 0;
@@ -224,9 +228,7 @@ i {
   margin: 0;
   color: #000;
   background-color: #ffffff;
-  font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica,
-    Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
-  font-size: 16px;
+  font-size: 1em;
   line-height: 1.5;
   word-wrap: break-word;
 }
@@ -234,6 +236,7 @@ i {
 .editor {
   padding: 1em 0;
   outline: none;
+  overflow: hidden;
 }
 
 .editor .inline-text {
@@ -303,7 +306,7 @@ i {
   border-bottom: 1px solid hsla(210, 18%, 87%, 1);
   height: 0.25em;
   padding: 0;
-  margin: 24px 0;
+  margin: 1.5em 0;
   background-color: #d0d7de;
   border: 0;
 }
@@ -350,8 +353,8 @@ td:before {
 .editor h4,
 .editor h5,
 .editor h6 {
-  margin-top: 24px;
-  margin-bottom: 16px;
+  margin-top: 2.5em;
+  margin-bottom: 0.75em;
   font-weight: 700;
   line-height: 1.25;
 }
@@ -383,18 +386,13 @@ td:before {
   color: #57606a;
 }
 
-.editor p {
-  margin-top: 0;
-  margin-bottom: 10px;
-}
-
 .editor .code-block {
-  margin-bottom: 1em;
+  margin-bottom: 2em;
 }
 
 .editor blockquote {
   margin: 0;
-  padding: 0 1em;
+  padding: 0 2em;
   color: #57606a;
   border-left: 0.25em solid #d0d7de;
 }
@@ -409,7 +407,6 @@ td:before {
 .editor code {
   font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas,
     Liberation Mono, monospace;
-  font-size: 12px;
 }
 
 .editor ::placeholder {
@@ -431,7 +428,12 @@ td:before {
 .editor ol,
 .editor table {
   margin-top: 0;
-  margin-bottom: 16px;
+  margin-bottom: 1.75em;
+}
+
+.editor blockquote + blockquote {
+  margin-top: -1.75em;
+  padding-top: 1.75em;
 }
 
 .editor blockquote > :first-child {
@@ -460,7 +462,7 @@ td:before {
 }
 
 .editor li > p {
-  margin-top: 16px;
+  margin-top: 1.75em;
 }
 
 .editor li + li {
@@ -473,7 +475,7 @@ td:before {
 
 .editor table th,
 .editor table td {
-  padding: 6px 13px;
+  padding: 0.6em 1em;
   border: 1px solid #d0d7de;
 }
 
@@ -507,12 +509,12 @@ td:before {
 
 .editor .code-first {
   padding-left: 0.4em;
-  border-top-left-radius: 6px;
-  border-bottom-left-radius: 6px;
+  border-top-left-radius: 0.3em;
+  border-bottom-left-radius: 0.3em;
 }
 
 .editor .code-last {
   padding-right: 0.4em;
-  border-top-right-radius: 6px;
-  border-bottom-right-radius: 6px;
+  border-top-right-radius: 0.3em;
+  border-bottom-right-radius: 0.3em;
 }
