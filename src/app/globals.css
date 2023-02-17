@@ -193,6 +193,7 @@ i {
   top: 0;
   border-bottom: 2px solid #eee;
   padding: 0.4em 0;
+  z-index: 999;
 }
 
 .toolbarIcon {
