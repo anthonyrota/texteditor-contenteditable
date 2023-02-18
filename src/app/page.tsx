@@ -23,6 +23,7 @@ import React, {
   memo,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -39,13 +40,9 @@ import type {
   Options as PrettierOptions,
   Plugin as PrettierPlugin,
 } from 'prettier';
-import prettier from 'prettier/standalone';
-import prettierTypescriptParser from 'prettier/parser-typescript';
-import prettierBabelParser from 'prettier/parser-babel';
-import prettierPostcssParser from 'prettier/parser-postcss';
-import prettierHtmlParser from 'prettier/parser-html';
 import { v4 as uuidv4 } from 'uuid';
 import Highlight, { PrismTheme, defaultProps } from 'prism-react-renderer';
+import dynamic from 'next/dynamic';
 
 const mainFont = Poppins({
   weight: ['400', '700'],
@@ -641,6 +638,9 @@ const prismTheme: PrismTheme = {
   ],
 };
 
+const useIsomorphicLayoutEffect =
+  typeof window !== 'undefined' ? useEffect : useLayoutEffect;
+
 function ReactCodeBlockNode({
   value,
   editorId,
@@ -765,6 +765,13 @@ function ReactCodeBlockNode({
       },
     });
   }
+  useIsomorphicLayoutEffect(() => {
+    if (editorRef.current) {
+      // @ts-expect-error
+      editorRef.current.getModel()!._isVue =
+        value.language === CodeBlockLanguage.Vue;
+    }
+  });
   const langOptions: Record<CodeBlockLanguage, string> = {
     [CodeBlockLanguage.Css]: 'CSS',
     [CodeBlockLanguage.Html]: 'HTML',
@@ -901,7 +908,7 @@ function ReactCodeBlockNode({
               theme={'my-theme'}
               onMount={(editor) => {
                 // @ts-expect-error
-                editor.getModel()._isVue =
+                editor.getModel()!._isVue =
                   value.language === CodeBlockLanguage.Vue;
                 editorRef.current = editor;
                 function updateHeight(): void {
@@ -910,9 +917,6 @@ function ReactCodeBlockNode({
                 }
                 updateHeight();
                 editor.onDidContentSizeChange(updateHeight);
-                setTimeout(() => {
-                  editor.getAction('editor.action.formatDocument')?.run();
-                }, 1000);
               }}
               onChange={(code) => callback.current(code)}
             />
@@ -923,50 +927,9 @@ function ReactCodeBlockNode({
   );
 }
 
-function formatCodeBlock(
-  code: string,
-  language: CodeBlockLanguage | undefined,
-): string {
-  const prettierOpts: PrettierOptions = {
-    singleQuote: true,
-    trailingComma: 'all',
-    tabWidth: 4,
-  };
-  const prettierPlugins: PrettierPlugin[] = [
-    prettierTypescriptParser,
-    prettierBabelParser,
-    prettierHtmlParser,
-    prettierHtmlParser,
-    prettierPostcssParser,
-  ];
-  let prettierParser: string | undefined;
-  let formatted = code;
-  if (language === CodeBlockLanguage.Ts) {
-    prettierParser = 'typescript';
-  } else if (language === CodeBlockLanguage.Js) {
-    prettierParser = 'babel';
-  } else if (language === CodeBlockLanguage.Css) {
-    prettierParser = 'css';
-  } else if (language === CodeBlockLanguage.Html) {
-    prettierParser = 'html';
-  } else if (language === CodeBlockLanguage.Vue) {
-    prettierParser = 'vue';
-  }
-  if (prettierParser) {
-    try {
-      formatted = prettier.format(code, {
-        ...prettierOpts,
-        parser: prettierParser,
-        plugins: prettierPlugins,
-      });
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('resolve')) {
-        throw error;
-      }
-    }
-  }
-  return formatted.replace(/[\r\n]+$/, '');
-}
+const preloadComponents = [
+  dynamic(() => import('./prettierImports').then(() => () => null)),
+];
 
 let monacoP: Promise<typeof import('monaco-editor')>;
 if (typeof window !== 'undefined') {
@@ -1001,15 +964,64 @@ if (typeof window !== 'undefined') {
       CodeBlockLanguage.Json,
       CodeBlockLanguage.Ts,
     ];
+    async function formatCodeBlock(
+      code: string,
+      language: CodeBlockLanguage | undefined,
+    ): Promise<string> {
+      const prettierOpts: PrettierOptions = {
+        singleQuote: true,
+        trailingComma: 'all',
+        tabWidth: 2,
+      };
+      const {
+        prettier,
+        prettierParserBabel,
+        prettierParserHtml,
+        prettierParserPostcss,
+        prettierParserTs,
+      } = await import(/* webpackPreload: true */ './prettierImports');
+      let prettierParser: string | undefined;
+      let formatted = code;
+      if (language === CodeBlockLanguage.Ts) {
+        prettierParser = 'typescript';
+      } else if (language === CodeBlockLanguage.Js) {
+        prettierParser = 'babel';
+      } else if (language === CodeBlockLanguage.Css) {
+        prettierParser = 'css';
+      } else if (language === CodeBlockLanguage.Html) {
+        prettierParser = 'html';
+      } else if (language === CodeBlockLanguage.Vue) {
+        prettierParser = 'vue';
+      }
+      if (prettierParser) {
+        try {
+          formatted = prettier.format(code, {
+            ...prettierOpts,
+            parser: prettierParser,
+            plugins: [
+              prettierParserBabel,
+              prettierParserHtml,
+              prettierParserPostcss,
+              prettierParserTs,
+            ],
+          });
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('resolve')) {
+            throw error;
+          }
+        }
+      }
+      return formatted.replace(/[\r\n]+$/, '');
+    }
     formatLangs.forEach((lang) => {
       monaco.languages.registerDocumentFormattingEditProvider(
         { language: lang, exclusive: true },
         {
-          provideDocumentFormattingEdits(model) {
+          async provideDocumentFormattingEdits(model) {
             return [
               {
                 range: model.getFullModelRange(),
-                text: formatCodeBlock(
+                text: await formatCodeBlock(
                   model.getValue(),
                   // @ts-expect-error
                   model._isVue ? CodeBlockLanguage.Vue : lang,
@@ -1022,11 +1034,11 @@ if (typeof window !== 'undefined') {
       monaco.languages.registerDocumentRangeFormattingEditProvider(
         { language: lang, exclusive: true },
         {
-          provideDocumentRangeFormattingEdits(model, range) {
+          async provideDocumentRangeFormattingEdits(model, range) {
             return [
               {
                 range: model.getFullModelRange(),
-                text: formatCodeBlock(
+                text: await formatCodeBlock(
                   model.getValue(),
                   // @ts-expect-error
                   model._isVue ? CodeBlockLanguage.Vue : lang,
@@ -5616,6 +5628,10 @@ function convertFromElToEditorValue(
               ) {
                 return NodeFilter.FILTER_REJECT;
               }
+              if (n.nodeName.toLowerCase() === 'br') {
+                text += '\n';
+                return NodeFilter.FILTER_REJECT;
+              }
               if (
                 n.nodeType === Node.ELEMENT_NODE &&
                 Array.from((n as HTMLElement).classList).some(
@@ -5628,9 +5644,8 @@ function convertFromElToEditorValue(
               }
               if (isBlock(n)) {
                 const b = n as HTMLElement;
-                if (!b.innerText || b.innerText !== '\n') {
+                if (text && (!b.innerText || b.innerText !== '\n')) {
                   text += '\n';
-                  return NodeFilter.FILTER_REJECT;
                 }
               }
               return NodeFilter.FILTER_ACCEPT;
@@ -5643,14 +5658,11 @@ function convertFromElToEditorValue(
             text += normalizeText(n.textContent || '');
           }
         }
-        const code = formatCodeBlock(
-          text
-            .split(/\r?\n/)
-            .map((line) => line.trimEnd())
-            .join('\n')
-            .replace(/^(\r|\n)+|(\r|\n)+$/g, ''),
-          lang,
-        );
+        const code = text
+          .split(/\r?\n/)
+          .map((line) => line.trimEnd())
+          .join('\n')
+          .replace(/^(\r|\n)+|(\r|\n)+$/g, '');
         blocks.push(
           makeCodeBlock(code, lang || CodeBlockLanguage.PlainText, makeId()),
         );
@@ -6956,11 +6968,7 @@ function ReactEditor({
         className="editor"
       >
         {isClient && hasPlaceholder && (
-          <div
-            className="editor__placeholder"
-            contentEditable={false}
-            ref={placeholderRef}
-          >
+          <div className="editor__placeholder" ref={placeholderRef}>
             {placeholder}
           </div>
         )}
@@ -7223,6 +7231,9 @@ export default function Home() {
         } as React.CSSProperties
       }
     >
+      {preloadComponents.map((PC, i) => (
+        <PC key={i} />
+      ))}
       <div className="page__inner">
         <main className="editor-wrapper">
           <ReactEditor
