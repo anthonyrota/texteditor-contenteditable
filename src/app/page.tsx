@@ -460,21 +460,22 @@ function ReactTableNode_({
         data-type={BlockNodeType.Table}
         data-id={value.id}
       >
-        <tbody>
+        <tbody className="block-table__tbody">
           {value.rows.map((row) => {
             return (
-              <tr key={row.id}>
+              <tr className="block-table__tr" key={row.id}>
                 {row.cells.map((cell, idx) => {
                   return (
                     <td
                       key={cell.id}
-                      className={
+                      className={[
                         selectedCells.includes(cell.value.id)
                           ? 'selected'
-                          : selectedCells.length > 0
-                          ? 'not-selected'
-                          : undefined
-                      }
+                          : selectedCells.length > 0 && 'not-selected',
+                        'block-table__td',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                     >
                       <ReactEditorValue
                         value={cell.value}
@@ -526,6 +527,8 @@ function ReactTableNode({
 }
 
 function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
+  const selectedBlocks = useContext(SelectedBlocksContext);
+  const isSelected = selectedBlocks.includes(value.id);
   return (
     <div
       className="img-container"
@@ -533,9 +536,18 @@ function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
       data-type={BlockNodeType.Image}
       data-id={value.id}
     >
+      <span className="block-placeholder-br">
+        <br />
+      </span>
       <div contentEditable={false}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={value.src} alt={value.caption} />
+        <img
+          className={['img', isSelected && 'img--selected']
+            .filter(Boolean)
+            .join(' ')}
+          src={value.src}
+          alt={value.caption}
+        />
       </div>
     </div>
   );
@@ -641,14 +653,19 @@ const prismTheme: PrismTheme = {
 const useIsomorphicLayoutEffect =
   typeof window !== 'undefined' ? useEffect : useLayoutEffect;
 
-function ReactCodeBlockNode({
-  value,
-  editorId,
-  queueCommand,
-}: {
+interface ReactCodeBlockNodeProps {
   value: CodeBlockNode;
   editorId: string;
   queueCommand: (cmd: Command) => void;
+}
+
+function ReactCodeBlockNode_({
+  value,
+  editorId,
+  queueCommand,
+  isSelected,
+}: ReactCodeBlockNodeProps & {
+  isSelected: boolean;
 }): JSX.Element {
   let editorRef =
     useRef<import('monaco-editor').editor.IStandaloneCodeEditor>();
@@ -688,8 +705,7 @@ function ReactCodeBlockNode({
     setIsClient(true);
   }, []);
   const loadingInner =
-    isLoading &&
-    (value.language !== CodeBlockLanguage.PlainText ? (
+    isLoading && value.language !== CodeBlockLanguage.PlainText ? (
       <Highlight
         {...defaultProps}
         code={value.code}
@@ -739,7 +755,7 @@ function ReactCodeBlockNode({
           ))}
         </tbody>
       </table>
-    ));
+    );
   function switchLang(lang: CodeBlockLanguage): void {
     if (lang === value.language) {
       return;
@@ -809,15 +825,17 @@ function ReactCodeBlockNode({
       clearTimeout(timeoutHandle);
     };
   }, [copyState, setCopyState]);
+  const selectedBlocks = useContext(SelectedBlocksContext);
+  const [isFocused, setIsFocused] = useState(false);
   return (
     <pre
       className={[
         'code-block-container',
         !isLoading && 'code-block-container--loaded',
+        isSelected && 'code-block-container--selected',
       ]
         .filter(Boolean)
         .join(' ')}
-      contentEditable={false}
       style={
         {
           '--bg-color': prismTheme.plain.backgroundColor,
@@ -827,96 +845,129 @@ function ReactCodeBlockNode({
       data-type={BlockNodeType.Code}
       data-id={value.id}
     >
-      <button
-        type="button"
-        className="code-block-container__copy-button"
-        aria-label="Copy Code to Clipboard"
-        title="Copy Code to Clipboard"
-        aria-hidden="true"
-        disabled={copyState !== CopyState$AllowCopy}
-        tabIndex={-1}
-        onClick={onCopyButtonClick}
-      >
-        {copyState === CopyState$AllowCopy
-          ? 'Copy'
-          : copyState === CopyState$CopySuccess
-          ? 'Copied'
-          : 'Copy Failed'}
-      </button>
-      <div className="code-block-container__lang-select-container">
-        <select
-          className="code-block-container__lang-select-container__select"
-          value={value.language}
-          onChange={(event) => {
-            switchLang(event.target.value as CodeBlockLanguage);
-          }}
+      <span className="block-placeholder-br">
+        <br />
+      </span>
+      <div contentEditable={false}>
+        <button
+          type="button"
+          className="code-block-container__copy-button"
+          aria-label="Copy Code to Clipboard"
+          title="Copy Code to Clipboard"
+          aria-hidden="true"
+          disabled={copyState !== CopyState$AllowCopy}
+          tabIndex={-1}
+          onClick={onCopyButtonClick}
         >
-          {Object.entries(langOptions).map(([lang, langDisplayText]) => (
-            <option value={lang} key={lang}>
-              {langDisplayText}
-            </option>
-          ))}
-        </select>
-      </div>
-      <code className="code-block-container__code">
-        {isLoading && (
-          <span className={'code-block-container__accessibility-hidden-text'}>
-            {value.code}
-          </span>
-        )}
-        {!isClient ? (
-          loadingInner
-        ) : (
-          <MonacoEditor
-            loading={loadingInner}
-            language={
-              value.language === CodeBlockLanguage.Vue
-                ? CodeBlockLanguage.Html
-                : value.language
-            }
-            value={value.code}
-            height={height}
-            options={{
-              scrollBeyondLastLine: false,
-              wordWrap: 'on',
-              wrappingStrategy: 'advanced',
-              minimap: {
-                enabled: false,
-              },
-              overviewRulerLanes: 0,
-              renderWhitespace: 'none',
-              guides: {
-                indentation: false,
-              },
-              renderLineHighlightOnlyWhenFocus: true,
-              scrollbar: {
-                handleMouseWheel: false,
-              },
-              fontSize: 16,
-              fontFamily: codeFont.style.fontFamily,
-              fontWeight: '400',
-              fontLigatures: true,
-              tabIndex: -1,
-              lineNumbersMinChars: 0,
+          {copyState === CopyState$AllowCopy
+            ? 'Copy'
+            : copyState === CopyState$CopySuccess
+            ? 'Copied'
+            : 'Copy Failed'}
+        </button>
+        <div className="code-block-container__lang-select-container">
+          <select
+            className="code-block-container__lang-select-container__select"
+            value={value.language}
+            onChange={(event) => {
+              switchLang(event.target.value as CodeBlockLanguage);
             }}
-            theme={'my-theme'}
-            onMount={(editor) => {
-              // @ts-expect-error
-              editor.getModel()!._isVue =
-                value.language === CodeBlockLanguage.Vue;
-              editorRef.current = editor;
-              function updateHeight(): void {
-                const contentHeight = editor.getContentHeight();
-                setHeight(editor.getContentHeight());
+          >
+            {Object.entries(langOptions).map(([lang, langDisplayText]) => (
+              <option value={lang} key={lang}>
+                {langDisplayText}
+              </option>
+            ))}
+          </select>
+        </div>
+        <code className="code-block-container__code">
+          {isLoading && (
+            <span className={'code-block-container__accessibility-hidden-text'}>
+              {value.code}
+            </span>
+          )}
+          {!isClient ? (
+            loadingInner
+          ) : (
+            <MonacoEditor
+              loading={loadingInner}
+              className={
+                isFocused
+                  ? undefined
+                  : 'code-block-container__monaco--not-focused'
               }
-              updateHeight();
-              editor.onDidContentSizeChange(updateHeight);
-            }}
-            onChange={(code) => callback.current(code)}
-          />
-        )}
-      </code>
+              language={
+                value.language === CodeBlockLanguage.Vue
+                  ? CodeBlockLanguage.Html
+                  : value.language
+              }
+              value={value.code}
+              height={height}
+              options={{
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                wrappingStrategy: 'advanced',
+                minimap: {
+                  enabled: false,
+                },
+                overviewRulerLanes: 0,
+                renderWhitespace: 'none',
+                guides: {
+                  indentation: false,
+                },
+                renderLineHighlightOnlyWhenFocus: true,
+                scrollbar: {
+                  handleMouseWheel: false,
+                },
+                fontSize: 16,
+                fontFamily: codeFont.style.fontFamily,
+                fontWeight: '400',
+                fontLigatures: true,
+                tabIndex: -1,
+                lineNumbersMinChars: 0,
+              }}
+              theme={'my-theme'}
+              onMount={(editor) => {
+                // @ts-expect-error
+                editor.getModel()!._isVue =
+                  value.language === CodeBlockLanguage.Vue;
+                editorRef.current = editor;
+                function updateHeight(): void {
+                  const contentHeight = editor.getContentHeight();
+                  setHeight(editor.getContentHeight());
+                }
+                updateHeight();
+                editor.onDidContentSizeChange(updateHeight);
+                editor.onDidFocusEditorText(() => {
+                  setIsFocused(true);
+                });
+                editor.onDidBlurEditorText(() => {
+                  setIsFocused(false);
+                });
+              }}
+              onChange={(code) => callback.current(code)}
+            />
+          )}
+        </code>
+      </div>
     </pre>
+  );
+}
+const ReactCodeBlockNode_m = memo(ReactCodeBlockNode_);
+function ReactCodeBlockNode({
+  value,
+  queueCommand,
+  editorId,
+}: ReactCodeBlockNodeProps): JSX.Element {
+  const selectedBlocks = useContext(SelectedBlocksContext);
+  const isSelected = selectedBlocks.includes(value.id);
+  return (
+    <ReactCodeBlockNode_
+      value={value}
+      queueCommand={queueCommand}
+      editorId={editorId}
+      isSelected={isSelected}
+    />
   );
 }
 
@@ -1713,7 +1764,7 @@ function walkEditorValues<T>(
   ) => { data: T; newValue?: EditorValue; stop: boolean; stopCur?: boolean },
   initialData: T,
   willMap: boolean,
-  onBlock?: (block: BlockNode) => void,
+  onBlock?: (block: BlockNode, data: T, parentEditor: EditorValue) => void,
 ): { didStop: boolean; retValue: T; mappedEditor: EditorValue } {
   let didStop = false;
   let retValue: T = initialData;
@@ -1723,7 +1774,7 @@ function walkEditorValues<T>(
   ): void {
     for (let bI = 0; bI < value.blocks.length && !didStop; bI++) {
       const block = value.blocks[bI];
-      onBlock?.(block);
+      onBlock?.(block, data, value);
       if (block.type === BlockNodeType.Table) {
         for (let i = 0; i < block.rows.length && !didStop; i++) {
           let row = block.rows[i];
@@ -2236,6 +2287,7 @@ function removeTextFromParagraph(
   startOffset: number,
   endOffset: number,
 ): ParagraphNode {
+  console.log(paragraph);
   const newParagraphChildren = [];
   let len = 0;
   for (let i = 0; i < paragraph.children.length; i++) {
@@ -3674,6 +3726,8 @@ type EditorDataTransfer = PlainDataTransfer | RichDataTransfer;
 
 const SelectedEditorsContext = createContext<string[]>([]);
 
+const SelectedBlocksContext = createContext<string[]>([]);
+
 const NumberedListIndicesContext = createContext<Record<string, number>>({});
 
 const isBrowser =
@@ -3885,10 +3939,7 @@ function mapInlineStyleIfActive<T>(
   countEdge = true,
 ): T | undefined {
   if (isCollapsed(selection)) {
-    if (selection.type !== SelectionType.Block) {
-      return undefined;
-    }
-    const point = selection.start;
+    const point = (selection as BlockSelection).start;
     if (point.type !== BlockSelectionPointType.Paragraph) {
       return undefined;
     }
@@ -4078,10 +4129,7 @@ function isParagraphStyleActive(
   condition: (style: ParagraphStyle) => boolean,
 ): boolean {
   if (isCollapsed(selection)) {
-    if (selection.type !== SelectionType.Block) {
-      return false;
-    }
-    const point = selection.start;
+    const point = (selection as BlockSelection).start;
     if (point.type !== BlockSelectionPointType.Paragraph) {
       return false;
     }
@@ -4106,9 +4154,13 @@ function isParagraphStyleActive(
       false,
     ).retValue;
   }
-  return !anyBlockMatches(
-    extractSelection(value, selection),
-    (block) => !block.isBlock && !condition(block.style),
+  const fragment = extractSelection(value, selection);
+  return (
+    fragment.blocks.some((block) => block.type === BlockNodeType.Paragraph) &&
+    !anyBlockMatches(
+      fragment,
+      (block) => !block.isBlock && !condition(block.style),
+    )
   );
 }
 
@@ -4233,6 +4285,7 @@ function scrollIntoView(
   selection: globalThis.Selection,
   scroller?: HTMLElement,
 ) {
+  if (Math.random() < 2) return;
   if (!selection.anchorNode) {
     return;
   }
@@ -6355,14 +6408,36 @@ function ReactEditor({
     );
   }
 
+  function isFocused(): boolean {
+    return (
+      !!document.activeElement &&
+      [
+        editorRef.current!,
+        ...Array.from(
+          editorRef.current!.querySelectorAll('[contenteditable="true"]'),
+        ),
+      ].some((el) => document.activeElement === el)
+    );
+  }
+
   const onBeforeInput = (event: InputEvent): void => {
-    if (document.activeElement !== editorRef.current) {
+    if (!isFocused()) {
       return;
     }
     event.preventDefault();
     const curNativeSelection = window.getSelection();
     const targetRange =
       event.getTargetRanges()[0] || curNativeSelection?.getRangeAt(0);
+    if (
+      hasPlaceholder &&
+      placeholderRef.current &&
+      (targetRange.startContainer === placeholderRef.current ||
+        targetRange.endContainer === placeholderRef.current ||
+        placeholderRef.current.contains(targetRange.startContainer) ||
+        placeholderRef.current.contains(targetRange.endContainer))
+    ) {
+      return;
+    }
     let selection: Selection;
     try {
       selection = findSelection(editorCtrl.current.value, targetRange, false);
@@ -6550,10 +6625,7 @@ function ReactEditor({
 
     const nativeSelection = window.getSelection()!;
 
-    if (
-      document.activeElement !== editorRef.current ||
-      nativeSelection.rangeCount === 0
-    ) {
+    if (!isFocused() || nativeSelection.rangeCount === 0) {
       if (editorCtrl.current.selection) {
         editorCtrl.current = pushState(
           editorCtrl.current,
@@ -6577,27 +6649,28 @@ function ReactEditor({
         placeholderRef.current.contains(nativeSelection.anchorNode) ||
         placeholderRef.current.contains(nativeSelection.focusNode))
     ) {
+      const curSelection: Selection = {
+        type: SelectionType.Block,
+        editorId: editorCtrl.current.value.id,
+        start: {
+          type: BlockSelectionPointType.Paragraph,
+          blockId: editorCtrl.current.value.blocks[0].id,
+          offset: 0,
+        },
+        end: {
+          type: BlockSelectionPointType.Paragraph,
+          blockId: editorCtrl.current.value.blocks[0].id,
+          offset: 0,
+        },
+      };
       editorCtrl.current = pushState(
         editorCtrl.current,
         editorCtrl.current.value,
-        {
-          type: SelectionType.Block,
-          editorId: editorCtrl.current.value.id,
-          start: {
-            type: BlockSelectionPointType.Paragraph,
-            blockId: editorCtrl.current.value.blocks[0].id,
-            offset: 0,
-          },
-          end: {
-            type: BlockSelectionPointType.Paragraph,
-            blockId: editorCtrl.current.value.blocks[0].id,
-            offset: 0,
-          },
-        },
+        curSelection,
         editorCtrl.current.textStyle,
         PushStateAction.Selection,
       );
-      updateSelection(editorCtrl.current.selection!);
+      updateSelection(curSelection);
       flushSync(() => {
         setRenderToggle((t) => !t);
       });
@@ -6609,6 +6682,15 @@ function ReactEditor({
       isSelectionBackwards(nativeSelection),
     );
 
+    if (
+      (nativeSelection.anchorNode instanceof HTMLElement &&
+        nativeSelection.anchorNode.getAttribute('contenteditable') ===
+          'false') ||
+      (nativeSelection.focusNode instanceof HTMLElement &&
+        nativeSelection.focusNode.getAttribute('contenteditable') === 'false')
+    ) {
+      updateSelection(curSelection);
+    }
     if (
       JSON.stringify(curSelection) !==
       JSON.stringify(editorCtrl.current.selection)
@@ -6663,7 +6745,7 @@ function ReactEditor({
 
   const onCopy = (event: ClipboardEvent): void => {
     const nativeSelection = window.getSelection();
-    if (!nativeSelection || document.activeElement !== editorRef.current) {
+    if (!nativeSelection || !isFocused()) {
       return;
     }
     const curSelection = findSelection(
@@ -6679,7 +6761,7 @@ function ReactEditor({
 
   const onKeyDown = (event: KeyboardEvent) => {
     const curSelection = window.getSelection();
-    if (!curSelection || document.activeElement !== editorRef.current) {
+    if (!curSelection || !isFocused()) {
       return;
     }
     const cmdKV = Object.entries(cmds);
@@ -6724,14 +6806,15 @@ function ReactEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function getSelectedEditors(
+  function getSelected(
     value: EditorValue,
     selection: Selection | null,
-  ): string[] {
+  ): { editors: string[]; blocks: string[] } {
     if (!selection || isCollapsed(selection)) {
-      return [];
+      return { editors: [], blocks: [] };
     }
-    const selected: string[] = [];
+    const selectedEditors: string[] = [];
+    const selectedBlocks: string[] = [];
     if (
       selection.editorId === value.id &&
       selection.type === SelectionType.Block
@@ -6754,7 +6837,7 @@ function ReactEditor({
       value,
       (subValue, isSelected, ids) => {
         if (isSelected) {
-          selected.push(subValue.id);
+          selectedEditors.push(subValue.id);
           return {
             stop: false,
             data: isSelected,
@@ -6782,7 +6865,7 @@ function ReactEditor({
               (selection.endCell.columnIndex <= columnIndex &&
                 columnIndex <= selection.startCell.columnIndex))
           ) {
-            selected.push(cell.value.id);
+            selectedEditors.push(cell.value.id);
             return {
               stop: false,
               data: true,
@@ -6814,7 +6897,7 @@ function ReactEditor({
             (endBlockIndex <= parentBlockIndex &&
               parentBlockIndex <= startBlockIndex)
           ) {
-            selected.push(subValue.id);
+            selectedEditors.push(subValue.id);
             return {
               stop: false,
               data: true,
@@ -6834,8 +6917,32 @@ function ReactEditor({
       },
       false,
       false,
+      (block, isSelected_, parentEditor) => {
+        let isSelected = isSelected_;
+        if (
+          !isSelected &&
+          parentEditor.id === selection.editorId &&
+          selection.type === SelectionType.Block
+        ) {
+          const startIndex = parentEditor.blocks.findIndex(
+            (otherBlock) => selection.start.blockId === otherBlock.id,
+          );
+          const endIndex = parentEditor.blocks.findIndex(
+            (otherBlock) => selection.end.blockId === otherBlock.id,
+          );
+          const blockIndex = parentEditor.blocks.findIndex(
+            (otherBlock) => otherBlock.id === block.id,
+          );
+          isSelected =
+            (startIndex <= blockIndex && blockIndex <= endIndex) ||
+            (endIndex <= blockIndex && blockIndex <= startIndex);
+        }
+        if (isSelected) {
+          selectedBlocks.push(block.id);
+        }
+      },
     );
-    return selected;
+    return { editors: selectedEditors, blocks: selectedBlocks };
   }
 
   function getListBlockIdToIdx(value: EditorValue): Record<string, number> {
@@ -6881,18 +6988,20 @@ function ReactEditor({
     e.preventDefault();
   };
 
-  const selectedEditors_ = useMemo(
-    () =>
-      getSelectedEditors(
-        editorCtrl.current.value,
-        editorCtrl.current.selection,
-      ),
+  const selected = useMemo(
+    () => getSelected(editorCtrl.current.value, editorCtrl.current.selection),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [editorCtrl.current.value, editorCtrl.current.selection],
   );
+  const selectedBlocks = useCustomCompareMemo(
+    () => selected.blocks,
+    [selected.blocks],
+    (prev, cur) =>
+      prev.length === cur.length && prev.every((v, i) => v === cur[i]),
+  );
   const selectedEditors = useCustomCompareMemo(
-    () => selectedEditors_,
-    [selectedEditors_],
+    () => selected.editors,
+    [selected.editors],
     (prev, cur) =>
       prev.length === cur.length && prev.every((v, i) => v === cur[i]),
   );
@@ -6917,12 +7026,8 @@ function ReactEditor({
     editorCtrl.current.value.blocks.length === 1 &&
     editorCtrl.current.value.blocks[0].type === BlockNodeType.Paragraph &&
     getParagraphLength(editorCtrl.current.value.blocks[0]) === 0 &&
-    Object.keys(editorCtrl.current.value.blocks[0].children[0].style).every(
-      (k) =>
-        (
-          (editorCtrl.current.value.blocks[0] as ParagraphNode)
-            .children[0] as TextNode
-        ).style[k as keyof TextStyle] === undefined,
+    Object.keys(editorCtrl.current.textStyle).every(
+      (k) => editorCtrl.current.textStyle === undefined,
     ) &&
     Object.keys(editorCtrl.current.value.blocks[0].style).every(
       (k) =>
@@ -6985,12 +7090,14 @@ function ReactEditor({
           </div>
         )}
         <SelectedEditorsContext.Provider value={selectedEditors}>
-          <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
-            <ReactEditorValue
-              queueCommand={queueCommand}
-              value={editorCtrl.current.value}
-            />
-          </NumberedListIndicesContext.Provider>
+          <SelectedBlocksContext.Provider value={selectedBlocks}>
+            <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
+              <ReactEditorValue
+                queueCommand={queueCommand}
+                value={editorCtrl.current.value}
+              />
+            </NumberedListIndicesContext.Provider>
+          </SelectedBlocksContext.Provider>
         </SelectedEditorsContext.Provider>
       </div>
     </>

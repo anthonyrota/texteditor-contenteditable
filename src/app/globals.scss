@@ -1,3 +1,9 @@
+@mixin hidden {
+  position: absolute;
+  top: -99999px;
+  left: -99999px;
+}
+
 html,
 body,
 div,
@@ -313,12 +319,38 @@ i {
   top: -0.5em;
 }
 
-.editor img {
+.editor .img-container {
+  display: flex;
+  justify-content: center;
+}
+
+.editor [contenteditable='true'] {
+  outline: none;
+}
+
+.editor .block-placeholder-br {
+  @include hidden;
+}
+
+@mixin block-outline($x: 0.35em) {
+  outline: rgb(199, 146, 234) solid $x;
+}
+
+.editor .img {
   display: block;
   border-style: none;
-  width: 100%;
+  max-width: 100%;
   box-sizing: content-box;
   background-color: #ffffff;
+
+  &::selection {
+    background-color: transparent;
+  }
+
+  &--selected {
+    border-radius: 0.3em;
+    @include block-outline;
+  }
 }
 
 .editor .code-block-container {
@@ -328,6 +360,14 @@ i {
   line-height: 24px;
   background-color: var(--bg-color);
   font-family: var(--code-font);
+
+  .monaco-editor .inputarea::selection {
+    background-color: transparent;
+  }
+
+  &__monaco--not-focused .monaco-editor .selected-text {
+    background-color: transparent !important;
+  }
 
   &__lang-select-container {
     font-size: 1em;
@@ -374,16 +414,19 @@ i {
       padding: 0 0.5 * $spacing;
       padding-right: $spacing * 2;
     }
-  }
 
-  @mixin hidden {
-    position: absolute;
-    top: -99999px;
-    left: -99999px;
+    &::selection,
+    & *::selection {
+      background-color: transparent;
+    }
   }
 
   &__accessibility-hidden-text {
     @include hidden;
+  }
+
+  &--selected {
+    @include block-outline;
   }
 
   $line-number-width-offset: 4px;
@@ -493,21 +536,25 @@ i {
   content: '';
 }
 
+.editor > .table-container {
+  overflow-x: scroll;
+}
+
 .editor .block-table {
   border-spacing: 0;
   border-collapse: collapse;
-  display: block;
+  display: table;
   width: 100%;
   overflow: auto;
   overflow-wrap: anywhere;
 }
 
-.editor .block-table td,
-.editor .block-table th {
+.editor .block-table .block-table__td,
+.editor .block-table .block-table__th {
   padding: 0;
 }
 
-.editor .block-table td:before {
+.editor .block-table .block-table__td:before {
   content: '';
   display: block;
   width: 10em;
@@ -631,34 +678,30 @@ i {
 //   margin-top: 0.5em;
 // }
 
-.editor .block-table th {
+.editor .block-table .block-table__th {
   font-weight: var(--bold-fw);
 }
 
-.editor .block-table th,
-.editor .block-table td {
+.editor .block-table .block-table__th,
+.editor .block-table .block-table__td {
   padding: 0.6em 1em;
   border: 1px solid #d0d7de;
 }
 
-.editor .block-table td.selected {
+.editor .block-table .block-table__td.selected {
   background-color: rgb(172, 206, 247);
 }
 
-.editor .block-table tr {
+.editor .block-table .block-table__tr {
   border-top: 1px solid hsla(210, 18%, 87%, 1);
 }
 
-.editor .block-table tr > td:not(.selected) {
-  background-color: #ffffff;
-}
-
-.editor .block-table tr:nth-child(2n) > td:not(.selected) {
+.editor .block-table__td:not(.selected) {
   background-color: #f6f8fa;
 }
 
-.editor .block-table td.not-selected::selection,
-.editor .block-table td.not-selected *::selection {
+.editor .block-table .block-table__td.not-selected::selection,
+.editor .block-table .block-table__td.not-selected *::selection {
   background-color: transparent;
 }
 
