@@ -4950,12 +4950,26 @@ function getTextStylesFromElement(
   const textDecorationLine = getStyle('textDecorationLine', element, parents);
   const verticalAlign = getStyle('verticalAlign', element, parents);
 
-  const anchor = parents.find(
-    (el) =>
-      el.tagName.toLowerCase() === 'a' &&
-      (el as HTMLAnchorElement).href &&
-      sanitizeUrl((el as HTMLAnchorElement).href) !== 'about:blank',
+  let href: string | undefined;
+  const parentAnchor = parents.find(
+    (el): el is HTMLAnchorElement => el.tagName.toLowerCase() === 'a',
   );
+  ifstmt: if (parentAnchor && parentAnchor.href) {
+    const sanitized = sanitizeUrl(parentAnchor.href);
+    const url = new URL(sanitized);
+    if (url.hash) {
+      if (
+        parents.some((el) =>
+          ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(
+            el.tagName.toLowerCase(),
+          ),
+        )
+      ) {
+        break ifstmt;
+      }
+    }
+    href = sanitized;
+  }
 
   return {
     bold: Number(fontWeight) >= 600 ? true : undefined,
@@ -4972,9 +4986,7 @@ function getTextStylesFromElement(
     code: parents.some((el) => el.tagName.toLowerCase() === 'code')
       ? true
       : undefined,
-    link: anchor && {
-      href: sanitizeUrl((anchor as HTMLAnchorElement).href),
-    },
+    link: href ? { href } : undefined,
   };
 }
 
