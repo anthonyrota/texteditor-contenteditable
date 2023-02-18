@@ -243,8 +243,12 @@ i {
   padding: 2rem 0;
 }
 
-.editor > [data-family='Editor'] > [data-type='Block/Paragraph'] {
-  padding: 0 0.4rem;
+.editor
+  .paragraph-container:not(
+    .editor-container .editor-container .paragraph-container
+  ) {
+  padding-left: 0.4rem;
+  padding-right: 0.4rem;
 }
 
 .editor .line-numbers::selection {
@@ -394,7 +398,7 @@ td:before {
   color: #57606a;
 }
 
-.editor .code-block {
+.editor .code-block-container {
   margin-bottom: 2em;
 }
 
@@ -417,11 +421,11 @@ td:before {
   opacity: 1;
 }
 
-.editor [data-family='Editor'] > *:first-child {
+.editor .editor-container > *:first-child {
   margin-top: 0 !important;
 }
 
-.editor [data-family='Editor'] > *:last-child {
+.editor .editor-container > *:last-child {
   margin-bottom: 0 !important;
 }
 

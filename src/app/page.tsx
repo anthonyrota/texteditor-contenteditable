@@ -453,7 +453,7 @@ function ReactTableNode_({
   queueCommand,
 }: ReactTableNodeProps & { selectedCells: string[] }): JSX.Element {
   return (
-    <div className="table-div">
+    <div className="table-container">
       <table
         data-family={EditorFamilyType.Block}
         data-type={BlockNodeType.Table}
@@ -527,6 +527,7 @@ function ReactTableNode({
 function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
   return (
     <div
+      className="img-container"
       data-family={EditorFamilyType.Block}
       data-type={BlockNodeType.Image}
       data-id={value.id}
@@ -587,7 +588,7 @@ function ReactCodeBlockNode({
   }, []);
   return (
     <div
-      className="code-block"
+      className="code-block-container"
       contentEditable={false}
       data-family={EditorFamilyType.Block}
       data-type={BlockNodeType.Code}
@@ -853,10 +854,12 @@ function ReactParagraphNode_(
         : undefined,
     marginLeft: value.style.indentLevel && `${value.style.indentLevel * 2}em`,
   };
+  let cn = 'paragraph-container';
   switch (value.style.type) {
     case ParagraphStyleType.Default: {
       return (
         <p
+          className={cn}
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -870,6 +873,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.Heading2: {
       return (
         <h2
+          className={cn}
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -883,6 +887,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.Heading1: {
       return (
         <h1
+          className={cn}
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -896,6 +901,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.Heading3: {
       return (
         <h3
+          className={cn}
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -909,6 +915,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.Quote: {
       return (
         <blockquote
+          className={cn}
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -922,6 +929,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.BulletList: {
       return (
         <li
+          className={cn}
           style={omit(style, ['marginLeft'])}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -935,6 +943,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.NumberedList: {
       return (
         <li
+          className={cn}
           style={omit(style, ['marginLeft'])}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -1181,7 +1190,11 @@ function ReactEditorValue_({
     });
   });
   return (
-    <div data-family={EditorFamilyType.Editor} data-id={value.id}>
+    <div
+      className="editor-container"
+      data-family={EditorFamilyType.Editor}
+      data-id={value.id}
+    >
       {children}
     </div>
   );
