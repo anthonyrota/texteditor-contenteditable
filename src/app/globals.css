@@ -120,10 +120,15 @@ table {
 
 html {
   font-size: 16px;
+  overflow-x: clip;
 }
 
 i {
   font-style: italic;
+}
+
+:root {
+  --bold-fw: 700;
 }
 
 .page {
@@ -133,8 +138,7 @@ i {
 
 .page__inner {
   width: 100%;
-  max-width: 1200px;
-  padding: 0 0.5em;
+  max-width: 1000px;
 }
 
 .tooltip__wrapper {
@@ -142,7 +146,7 @@ i {
   display: inline-block;
   color: #fff;
   font-size: 100%;
-  font-weight: 700;
+  font-weight: var(--bold-fw);
 }
 
 .tooltip__tooltip {
@@ -235,9 +239,16 @@ i {
 }
 
 .editor {
-  padding: 1em 0;
   outline: none;
-  overflow: hidden;
+  padding: 2rem 0;
+}
+
+.editor > [data-family='Editor'] > [data-type='Block/Paragraph'] {
+  padding: 0 0.4rem;
+}
+
+.editor .line-numbers::selection {
+  background-color: transparent;
 }
 
 .editor .inline-text {
@@ -261,12 +272,12 @@ i {
 }
 
 .editor b {
-  font-weight: 700;
+  font-weight: var(--bold-fw);
 }
 
 .editor h1 {
   margin: 0.67em 0;
-  font-weight: 700;
+  font-weight: var(--bold-fw);
   padding-bottom: 0.3em;
   font-size: 2em;
 }
@@ -293,11 +304,7 @@ i {
   max-width: 100%;
   box-sizing: content-box;
   background-color: #ffffff;
-}
-
-.editor code {
-  font-family: monospace, monospace;
-  font-size: 1em;
+  margin-bottom: 2em;
 }
 
 .editor hr {
@@ -356,33 +363,33 @@ td:before {
 .editor h6 {
   margin-top: 2.5em;
   margin-bottom: 0.75em;
-  font-weight: 700;
+  font-weight: var(--bold-fw);
   line-height: 1.25;
 }
 
 .editor h2 {
-  font-weight: 700;
+  font-weight: var(--bold-fw);
   padding-bottom: 0.3em;
   font-size: 1.5em;
 }
 
 .editor h3 {
-  font-weight: 700;
+  font-weight: var(--bold-fw);
   font-size: 1.25em;
 }
 
 .editor h4 {
-  font-weight: 700;
+  font-weight: var(--bold-fw);
   font-size: 1em;
 }
 
 .editor h5 {
-  font-weight: 700;
+  font-weight: var(--bold-fw);
   font-size: 0.875em;
 }
 
 .editor h6 {
-  font-weight: 700;
+  font-weight: var(--bold-fw);
   font-size: 0.85em;
   color: #57606a;
 }
@@ -403,11 +410,6 @@ td:before {
   margin-top: 0;
   margin-bottom: 0;
   /* padding-left: 2em; MOVED TO INLINE STYLE */
-}
-
-.editor code {
-  font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas,
-    Liberation Mono, monospace;
 }
 
 .editor ::placeholder {
@@ -471,7 +473,7 @@ td:before {
 }
 
 .editor table th {
-  font-weight: 700;
+  font-weight: var(--bold-fw);
 }
 
 .editor table th,

@@ -27,7 +27,7 @@ import React, {
   useState,
 } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { Inter, Fira_Code } from '@next/font/google';
+import { Poppins, Fira_Code } from '@next/font/google';
 import { Tooltip } from '@/Tooltip';
 import { createDraft, finishDraft } from 'immer';
 import { WritableDraft } from 'immer/dist/internal';
@@ -43,16 +43,19 @@ import prettierTypescriptParser from 'prettier/parser-typescript';
 import prettierBabelParser from 'prettier/parser-babel';
 import prettierPostcssParser from 'prettier/parser-postcss';
 import prettierHtmlParser from 'prettier/parser-html';
+import { v4 as uuidv4 } from 'uuid';
 
-const InterFont = Inter({
+const mainFont = Poppins({
   weight: ['400', '700'],
-  style: 'normal',
+  style: ['normal', 'italic'],
   subsets: ['latin'],
+  display: 'block',
 });
-const FiraCodeFont = Fira_Code({
+const codeFont = Fira_Code({
   weight: '400',
   style: 'normal',
   subsets: ['latin'],
+  display: 'block',
 });
 
 enum EditorFamilyType {
@@ -528,8 +531,10 @@ function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
       data-type={BlockNodeType.Image}
       data-id={value.id}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={value.src} alt={value.caption} />
+      <div contentEditable={false}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={value.src} alt={value.caption} />
+      </div>
     </div>
   );
 }
@@ -545,9 +550,7 @@ function ReactCodeBlockNode({
   queueCommand: (cmd: Command) => void;
 }): JSX.Element {
   let editorRef =
-    useRef<
-      import('monaco-editor/esm/vs/editor/editor.api.js').editor.IStandaloneCodeEditor
-    >();
+    useRef<import('monaco-editor').editor.IStandaloneCodeEditor>();
   const [height, setHeight] = useState(0);
   const callback = useRef<any>();
   callback.current = (code: string) => {
@@ -613,12 +616,13 @@ function ReactCodeBlockNode({
             },
             renderLineHighlightOnlyWhenFocus: true,
             scrollbar: {
-              alwaysConsumeMouseWheel: false,
+              handleMouseWheel: false,
             },
             fontSize: 16,
-            fontFamily: FiraCodeFont.style.fontFamily,
+            fontFamily: codeFont.style.fontFamily,
             fontWeight: '400',
             fontLigatures: true,
+            tabIndex: -1,
           }}
           theme={'my-theme'}
           onMount={(editor) => {
@@ -629,6 +633,11 @@ function ReactCodeBlockNode({
             editor.onDidContentSizeChange(() => {
               const contentHeight = editor.getContentHeight();
               setHeight(contentHeight);
+            });
+            editor.onDidBlurEditorText(() => {
+              monacoP.then((monaco) => {
+                editor.setSelection(new monaco.Selection(0, 0, 0, 0));
+              });
             });
             setTimeout(() => {
               editor.getAction('editor.action.formatDocument')?.run();
@@ -686,8 +695,10 @@ function formatCodeBlock(
   return formatted.replace(/[\r\n]+$/, '');
 }
 
+let monacoP: Promise<typeof import('monaco-editor')>;
 if (typeof window !== 'undefined') {
-  loader.init().then((monaco) => {
+  monacoP = loader.init();
+  monacoP.then((monaco) => {
     monaco.editor.defineTheme('my-theme', monacoTheme as any);
     monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
       target: monaco.languages.typescript.ScriptTarget.Latest,
@@ -987,11 +998,14 @@ function ReactTextNode({
     if (value.style.script === TextScript.Subscript) {
       text = <sub>{text}</sub>;
     }
+    const cn = value.style.code ? codeFont.className : mainFont.className;
     if (typeof text !== 'string' && !Array.isArray(text)) {
       return cloneElement(text, {
         className:
           'inline-text' +
-          (text.props.className ? ' ' + text.props.className : ''),
+          (text.props.className ? ' ' + text.props.className : '') +
+          ' ' +
+          cn,
         'data-family': EditorFamilyType.Inline,
         'data-type': InlineNodeType.Text,
         'data-paragraph-offset-start': start,
@@ -1001,7 +1015,7 @@ function ReactTextNode({
     }
     return (
       <span
-        className="inline-text"
+        className={'inline-text' + ' ' + cn}
         data-family={EditorFamilyType.Inline}
         data-type={InlineNodeType.Text}
         data-paragraph-offset-start={start}
@@ -4951,6 +4965,13 @@ function getTextStylesFromElement(
   };
 }
 
+function normalizeText(text: string): string {
+  return text.replace(
+    /[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000\uFEFF]/,
+    ' ',
+  );
+}
+
 function convertFromElToEditorValue(
   document: Document,
   el: HTMLElement,
@@ -4980,7 +5001,7 @@ function convertFromElToEditorValue(
         }
         if (
           node instanceof HTMLElement &&
-          (node.style.appearance === 'none' || node.style.display === 'none')
+          (node.style.visibility == 'hidden' || node.style.display === 'none')
         ) {
           return NodeFilter.FILTER_REJECT;
         }
@@ -5226,24 +5247,24 @@ function convertFromElToEditorValue(
           elm: HTMLElement,
         ): CodeBlockLanguage | undefined => {
           const cns = Array.from(elm.classList);
-          if (cns.some((cls) => cls.includes('html'))) {
+          if (cns.some((cls) => /\bhtml\b/.test(cls))) {
             return CodeBlockLanguage.Html;
           } else if (
-            cns.some((cls) => cls.includes('javascript')) ||
-            cns.some((cls) => cls.includes('-js'))
+            cns.some((cls) => /\bjavascript/.test(cls)) ||
+            cns.some((cls) => /\bjs/.test(cls))
           ) {
             return CodeBlockLanguage.Js;
           } else if (
-            cns.some((cls) => cls.includes('typescript')) ||
-            cns.some((cls) => cls.includes('ts'))
+            cns.some((cls) => /\btypescript/.test(cls)) ||
+            cns.some((cls) => /\bts/.test(cls))
           ) {
             return CodeBlockLanguage.Ts;
-          } else if (cns.some((cls) => cls.includes('vue'))) {
+          } else if (cns.some((cls) => /\bvue/.test(cls))) {
             return CodeBlockLanguage.Vue;
           } else if (
-            cns.some((cls) => cls.includes('hljs'))
-              ? cns.some((cls) => cls.includes('language-css'))
-              : cns.some((cls) => cls.includes('css'))
+            cns.some((cls) => /\bhljs/.test(cls))
+              ? cns.some((cls) => /\blanguage-css/.test(cls))
+              : cns.some((cls) => /\bcss/.test(cls))
           ) {
             return CodeBlockLanguage.Css;
           } else if (cns.some((cls) => cls.includes('json'))) {
@@ -5252,9 +5273,9 @@ function convertFromElToEditorValue(
         };
         let lang = getLangFromEl(blockEl);
         if (!lang) {
-          const codeEl = blockEl.querySelector('code');
-          if (codeEl) {
-            lang = getLangFromEl(codeEl);
+          const codeEls = blockEl.querySelectorAll('pre,code');
+          for (let i = 0; i < codeEls.length && !lang; i++) {
+            lang = getLangFromEl(codeEls[i] as HTMLElement);
           }
         }
         if (!lang && blockEl.parentElement) {
@@ -5278,18 +5299,31 @@ function convertFromElToEditorValue(
             lang = getLangFromEl(langChild as HTMLElement);
           }
         }
+        let text = '';
         const walker = document.createTreeWalker(
           blockEl,
           NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
           {
             acceptNode(n) {
               if (
-                n.nodeType === Node.ELEMENT_NODE &&
-                Array.from((n as HTMLElement).classList).some((cn) =>
-                  cn.includes('gutter'),
-                )
+                n.nodeName.toLowerCase() === 'button' ||
+                (n.nodeType === Node.ELEMENT_NODE &&
+                  Array.from((n as HTMLElement).classList).some((cn) =>
+                    cn.includes('gutter'),
+                  ))
               ) {
                 return NodeFilter.FILTER_REJECT;
+              }
+              if (
+                n.nodeType === Node.ELEMENT_NODE &&
+                Array.from(n.parentElement!.classList).some(
+                  (cls) => cls === 'gatsby-highlight-code-line',
+                )
+              ) {
+                if (text) {
+                  text += '\n';
+                }
+                text += normalizeText(n.textContent || '');
               }
               if (isBlock(n)) {
                 const b = n as HTMLElement;
@@ -5302,10 +5336,9 @@ function convertFromElToEditorValue(
           },
         );
         let n: Node | null = null;
-        let text = '';
         while ((n = walker.nextNode())) {
           if (n.nodeType === Node.TEXT_NODE) {
-            text += n.textContent!.replace(/ /g, ' ');
+            text += normalizeText(n.textContent || '');
           }
         }
         const code = formatCodeBlock(
@@ -5317,6 +5350,8 @@ function convertFromElToEditorValue(
           lang,
         );
         blocks.push(makeCodeBlock(code, lang, makeId()));
+        prevBlockParent = undefined;
+        continue;
       }
       prevBlockParent = undefined;
       continue;
@@ -5334,7 +5369,7 @@ function convertFromElToEditorValue(
       continue;
     }
     if (node.nodeType === Node.TEXT_NODE && node.textContent) {
-      const text = node.textContent;
+      const text = normalizeText(node.textContent);
       const style = getTextStylesFromElement(
         node.parentElement!,
         parentElements,
@@ -6807,17 +6842,12 @@ function NumberedListIcon(props: ToolbarIconProps): JSX.Element {
 }
 
 export default function Home() {
-  let id_ = 0;
   function id(): string {
-    return String(id_++);
+    return uuidv4();
   }
 
   return (
-    <div
-      className={['page', InterFont.className, FiraCodeFont.className].join(
-        ' ',
-      )}
-    >
+    <div className="page">
       <div className="page__inner">
         <main className="editor-wrapper">
           <ReactEditor
