@@ -128,7 +128,7 @@ i {
 }
 
 :root {
-  --bold-fw: 700;
+  --bold-fw: 600;
 }
 
 .page {
@@ -293,9 +293,7 @@ i {
 }
 
 .editor h1 {
-  margin: 0.67em 0;
   font-weight: var(--bold-fw);
-  padding-bottom: 0.3em;
   font-size: 2em;
 }
 
@@ -321,8 +319,6 @@ i {
   width: 100%;
   box-sizing: content-box;
   background-color: #ffffff;
-  margin-top: 3em;
-  margin-bottom: 3.5em;
 }
 
 .editor .code-block-container {
@@ -386,8 +382,6 @@ i {
     left: -99999px;
   }
 
-  $size-small: 800px;
-
   &__accessibility-hidden-text {
     @include hidden;
   }
@@ -432,17 +426,16 @@ i {
   }
 
   & {
+    position: relative;
     border-radius: 10px;
     padding: $spacing * 1.2 $spacing * 1.5;
     padding-top: $spacing * 3;
   }
 
-  @media screen and (max-width: $size-small) {
+  @media screen and (max-width: 1000px) {
     & {
-      padding-left: 0;
-      padding-right: 0;
-      margin-left: 0;
-      margin-right: 0;
+      padding-left: $spacing * 0.6;
+      padding-right: $spacing * 0.6;
       border-radius: 0;
     }
   }
@@ -526,7 +519,7 @@ i {
 .editor h4,
 .editor h5,
 .editor h6 {
-  margin-top: 2.5em;
+  margin-top: 1.75em;
   margin-bottom: 0.75em;
   font-weight: var(--bold-fw);
   line-height: 1.25;
@@ -534,7 +527,6 @@ i {
 
 .editor h2 {
   font-weight: var(--bold-fw);
-  padding-bottom: 0.3em;
   font-size: 1.5em;
 }
 
@@ -559,26 +551,17 @@ i {
   color: #57606a;
 }
 
-.editor .code-block-container {
-  margin-bottom: 1.25em;
+.editor .code-block-container,
+.editor .img-container {
+  margin-top: 2em;
+  margin-bottom: 2em;
 }
 
 .editor blockquote {
   margin: 0;
-  padding: 0 2em;
+  padding: 0 1em;
   color: #57606a;
-  border-left: 0.25em solid #d0d7de;
-}
-.editor ul,
-.editor ol {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-@for $i from 0 through 8 {
-  .editor ul[data-indent='#{$i}'],
-  .editor ol[data-indent='#{$i}'] {
-    padding-left: #{$i + 2}em;
-  }
+  border-left: 0.2em solid #c792ea;
 }
 
 .editor ::placeholder {
@@ -596,20 +579,35 @@ i {
 
 .editor p,
 .editor blockquote,
+.editor .last-list,
+.editor .last-list {
+  margin-top: 0;
+  margin-bottom: 1em;
+}
+
 .editor ul,
 .editor ol {
   margin-top: 0;
-  margin-bottom: 1.75em;
+  margin-bottom: 0;
+  @for $i from 0 through 8 {
+    &[data-indent='#{$i}'] {
+      padding-left: #{($i + 1) * 2}em;
+    }
+  }
+}
+
+.editor li:not(.first-last-item) {
+  margin-top: 0.25em;
 }
 
 .editor .block-table {
   margin-top: 0;
-  margin-bottom: 3em;
+  margin-bottom: 0.75;
 }
 
 .editor blockquote + blockquote {
-  margin-top: -1.75em;
-  padding-top: 1.75em;
+  margin-top: -1em;
+  padding-top: 1em;
 }
 
 .editor blockquote > :first-child {
@@ -629,21 +627,9 @@ i {
   font-size: inherit;
 }
 
-.editor ul ul,
-.editor ul ol,
-.editor ol ol,
-.editor ol ul {
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
-.editor li > p {
-  margin-top: 1.75em;
-}
-
-.editor li + li {
-  margin-top: 0.75em;
-}
+// .editor li + li {
+//   margin-top: 0.5em;
+// }
 
 .editor .block-table th {
   font-weight: var(--bold-fw);

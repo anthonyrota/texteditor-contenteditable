@@ -45,7 +45,7 @@ import Highlight, { PrismTheme, defaultProps } from 'prism-react-renderer';
 import dynamic from 'next/dynamic';
 
 const mainFont = Poppins({
-  weight: ['400', '700'],
+  weight: ['300', '600'],
   style: ['normal', 'italic'],
   subsets: ['latin'],
   display: 'block',
@@ -810,120 +810,113 @@ function ReactCodeBlockNode({
     };
   }, [copyState, setCopyState]);
   return (
-    <div
+    <pre
       className={[
         'code-block-container',
         !isLoading && 'code-block-container--loaded',
-      ].join(' ')}
+      ]
+        .filter(Boolean)
+        .join(' ')}
       contentEditable={false}
+      style={
+        {
+          '--bg-color': prismTheme.plain.backgroundColor,
+        } as React.CSSProperties
+      }
       data-family={EditorFamilyType.Block}
       data-type={BlockNodeType.Code}
       data-id={value.id}
     >
-      <pre
-        className={[
-          'code-block-container',
-          value.language && 'code-block-container__has-lang',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        style={
-          {
-            '--bg-color': prismTheme.plain.backgroundColor,
-          } as React.CSSProperties
-        }
+      <button
+        type="button"
+        className="code-block-container__copy-button"
+        aria-label="Copy Code to Clipboard"
+        title="Copy Code to Clipboard"
+        aria-hidden="true"
+        disabled={copyState !== CopyState$AllowCopy}
+        tabIndex={-1}
+        onClick={onCopyButtonClick}
       >
-        <button
-          type="button"
-          className="code-block-container__copy-button"
-          aria-label="Copy Code to Clipboard"
-          title="Copy Code to Clipboard"
-          aria-hidden="true"
-          disabled={copyState !== CopyState$AllowCopy}
-          tabIndex={-1}
-          onClick={onCopyButtonClick}
+        {copyState === CopyState$AllowCopy
+          ? 'Copy'
+          : copyState === CopyState$CopySuccess
+          ? 'Copied'
+          : 'Copy Failed'}
+      </button>
+      <div className="code-block-container__lang-select-container">
+        <select
+          className="code-block-container__lang-select-container__select"
+          value={value.language}
+          onChange={(event) => {
+            switchLang(event.target.value as CodeBlockLanguage);
+          }}
         >
-          {copyState === CopyState$AllowCopy
-            ? 'Copy'
-            : copyState === CopyState$CopySuccess
-            ? 'Copied'
-            : 'Copy Failed'}
-        </button>
-        <div className="code-block-container__lang-select-container">
-          <select
-            className="code-block-container__lang-select-container__select"
-            value={value.language}
-            onChange={(event) => {
-              switchLang(event.target.value as CodeBlockLanguage);
+          {Object.entries(langOptions).map(([lang, langDisplayText]) => (
+            <option value={lang} key={lang}>
+              {langDisplayText}
+            </option>
+          ))}
+        </select>
+      </div>
+      <code className="code-block-container__code">
+        {isLoading && (
+          <span className={'code-block-container__accessibility-hidden-text'}>
+            {value.code}
+          </span>
+        )}
+        {!isClient ? (
+          loadingInner
+        ) : (
+          <MonacoEditor
+            loading={loadingInner}
+            language={
+              value.language === CodeBlockLanguage.Vue
+                ? CodeBlockLanguage.Html
+                : value.language
+            }
+            value={value.code}
+            height={height}
+            options={{
+              scrollBeyondLastLine: false,
+              wordWrap: 'on',
+              wrappingStrategy: 'advanced',
+              minimap: {
+                enabled: false,
+              },
+              overviewRulerLanes: 0,
+              renderWhitespace: 'none',
+              guides: {
+                indentation: false,
+              },
+              renderLineHighlightOnlyWhenFocus: true,
+              scrollbar: {
+                handleMouseWheel: false,
+              },
+              fontSize: 16,
+              fontFamily: codeFont.style.fontFamily,
+              fontWeight: '400',
+              fontLigatures: true,
+              tabIndex: -1,
+              lineNumbersMinChars: 0,
             }}
-          >
-            {Object.entries(langOptions).map(([lang, langDisplayText]) => (
-              <option value={lang} key={lang}>
-                {langDisplayText}
-              </option>
-            ))}
-          </select>
-        </div>
-        <code className="code-block-container__code">
-          {isLoading && (
-            <span className={'code-block-container__accessibility-hidden-text'}>
-              {value.code}
-            </span>
-          )}
-          {!isClient ? (
-            loadingInner
-          ) : (
-            <MonacoEditor
-              loading={loadingInner}
-              language={
-                value.language === CodeBlockLanguage.Vue
-                  ? CodeBlockLanguage.Html
-                  : value.language
+            theme={'my-theme'}
+            onMount={(editor) => {
+              // @ts-expect-error
+              editor.getModel()!._isVue =
+                value.language === CodeBlockLanguage.Vue;
+              editorRef.current = editor;
+              function updateHeight(): void {
+                const contentHeight = editor.getContentHeight();
+                setHeight(editor.getContentHeight());
               }
-              value={value.code}
-              height={height}
-              options={{
-                scrollBeyondLastLine: false,
-                wordWrap: 'on',
-                wrappingStrategy: 'advanced',
-                minimap: {
-                  enabled: false,
-                },
-                overviewRulerLanes: 0,
-                renderWhitespace: 'none',
-                guides: {
-                  indentation: false,
-                },
-                renderLineHighlightOnlyWhenFocus: true,
-                scrollbar: {
-                  handleMouseWheel: false,
-                },
-                fontSize: 16,
-                fontFamily: codeFont.style.fontFamily,
-                fontWeight: '400',
-                fontLigatures: true,
-                tabIndex: -1,
-                lineNumbersMinChars: 0,
-              }}
-              theme={'my-theme'}
-              onMount={(editor) => {
-                // @ts-expect-error
-                editor.getModel()!._isVue =
-                  value.language === CodeBlockLanguage.Vue;
-                editorRef.current = editor;
-                function updateHeight(): void {
-                  const contentHeight = editor.getContentHeight();
-                  setHeight(editor.getContentHeight());
-                }
-                updateHeight();
-                editor.onDidContentSizeChange(updateHeight);
-              }}
-              onChange={(code) => callback.current(code)}
-            />
-          )}
-        </code>
-      </pre>
-    </div>
+              updateHeight();
+              editor.onDidContentSizeChange(updateHeight);
+            }}
+            onChange={(code) => callback.current(code)}
+          />
+        )}
+      </code>
+    </pre>
   );
 }
 
@@ -1052,20 +1045,11 @@ if (typeof window !== 'undefined') {
   });
 }
 
-function ReactParagraphNode_(
-  props:
-    | {
-        value: ParagraphNode & {
-          style: Exclude<ParagraphStyle, NumberedListParagraphStyle>;
-        };
-      }
-    | {
-        value: ParagraphNode & {
-          style: NumberedListParagraphStyle;
-        };
-        listIndex: number;
-      },
-): JSX.Element {
+function ReactParagraphNode_(props: {
+  value: ParagraphNode;
+  listIndex?: number;
+  isFirstListItem?: boolean;
+}): JSX.Element {
   const { value } = props;
   const isEmpty =
     value.children.length === 1 &&
@@ -1211,7 +1195,12 @@ function ReactParagraphNode_(
     case ParagraphStyleType.BulletList: {
       return (
         <li
-          className="paragraph-container--with-toplevel-padding"
+          className={[
+            'paragraph-container--with-toplevel-padding',
+            props.isFirstListItem && 'first-list-item',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           style={omit(style, ['marginLeft'])}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -1225,7 +1214,12 @@ function ReactParagraphNode_(
     case ParagraphStyleType.NumberedList: {
       return (
         <li
-          className="paragraph-container--with-toplevel-padding"
+          className={[
+            'paragraph-container--with-toplevel-padding',
+            props.isFirstListItem && 'first-list-item',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           style={omit(style, ['marginLeft'])}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -1350,7 +1344,7 @@ function ReactEditorValue_({
   listBlockIdToIdx: Record<string, number>;
 }): JSX.Element {
   let children: JSX.Element[] = [];
-  groupArr(
+  const grouped = groupArr(
     value.blocks,
     (block) => {
       if (
@@ -1372,14 +1366,17 @@ function ReactEditorValue_({
         b !== null &&
         a.listId === b.listId &&
         a.indent === b.indent),
-  ).forEach((group) => {
+  );
+  grouped.forEach((group, i) => {
     const { groupInfo } = group;
     if (groupInfo !== null) {
-      const { listType, indent } = groupInfo;
+      const { listType, listId, indent } = groupInfo;
       const items = group.items as (ParagraphNode & {
         style: BulletListParagraphStyle | NumberedListParagraphStyle;
       })[];
-      const listNodes = items.map((block) => {
+      const listNodes = items.map((block, j) => {
+        const isFirstListItem =
+          j === 0 && !(i > 0 && grouped[i - 1].groupInfo?.listId === listId);
         if (block.style.type === ParagraphStyleType.NumberedList) {
           return (
             <ReactParagraphNode
@@ -1389,6 +1386,7 @@ function ReactEditorValue_({
                 }
               }
               listIndex={listBlockIdToIdx[block.id]}
+              isFirstListItem={isFirstListItem}
               key={block.id}
             />
           );
@@ -1400,17 +1398,20 @@ function ReactEditorValue_({
                 style: BulletListParagraphStyle;
               }
             }
+            isFirstListItem={isFirstListItem}
             key={block.id}
           />
         );
       });
+      const isLastList =
+        i === grouped.length - 1 || grouped[i + 1].groupInfo?.listId !== listId;
       if (listType === ParagraphStyleType.NumberedList) {
         children.push(
           <ol
             key={items[0].id}
             start={listBlockIdToIdx[items[0].id] + 1}
             data-indent={indent}
-            // style={{ paddingLeft: `${(indent + 1) * 2}em` }}
+            className={isLastList ? 'last-list' : undefined}
           >
             {listNodes}
           </ol>,
@@ -1420,7 +1421,7 @@ function ReactEditorValue_({
           <ul
             key={items[0].id}
             data-indent={indent}
-            // style={{ paddingLeft: `${(indent + 1) * 2}em` }}
+            className={isLastList ? 'last-list' : undefined}
           >
             {listNodes}
           </ul>,
@@ -5451,11 +5452,24 @@ function convertFromElToEditorValue(
       const olIdx = blockParents
         .slice(firstLiIdx + 1)
         .findIndex((el) => el.tagName.toLowerCase() === 'ol');
+      const lastListIndex =
+        ulIdx !== -1 || olIdx !== -1
+          ? blockParents.length -
+            1 -
+            blockParents
+              .slice()
+              .reverse()
+              .findIndex(
+                (el) =>
+                  el.tagName.toLowerCase() === 'ul' ||
+                  el.tagName.toLowerCase() === 'ol',
+              )
+          : -1;
       if (olIdx !== -1) {
         if (ulIdx === -1 || ulIdx > olIdx) {
           return makeNumberedListParagraph(
             [],
-            makeIdCached(blockParents[olIdx + firstLiIdx + 1]),
+            makeIdCached(blockParents[lastListIndex]),
             makeId(),
             paraStyleBase,
           );
@@ -5463,9 +5477,7 @@ function convertFromElToEditorValue(
       }
       return makeBulletListParagraph(
         [],
-        ulIdx !== -1
-          ? makeIdCached(blockParents[ulIdx + firstLiIdx + 1])
-          : makeId(),
+        ulIdx !== -1 ? makeIdCached(blockParents[lastListIndex]) : makeId(),
         makeId(),
         paraStyleBase,
       );
