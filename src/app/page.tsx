@@ -4,6 +4,7 @@
   const consoleError = console.error;
   const SUPPRESSED_WARNINGS = [
     'Support for defaultProps will be removed from function components in a future major release',
+    'Failed %s type: %s%s',
   ];
   console.error = function filterWarnings(msg, ...args) {
     if (
@@ -44,6 +45,7 @@ import prettierBabelParser from 'prettier/parser-babel';
 import prettierPostcssParser from 'prettier/parser-postcss';
 import prettierHtmlParser from 'prettier/parser-html';
 import { v4 as uuidv4 } from 'uuid';
+import Highlight, { PrismTheme, defaultProps } from 'prism-react-renderer';
 
 const mainFont = Poppins({
   weight: ['400', '700'],
@@ -149,13 +151,14 @@ enum CodeBlockLanguage {
   Html = 'html',
   Css = 'css',
   Vue = 'vue',
+  PlainText = 'plaintext',
 }
 
 interface CodeBlockNode {
   type: BlockNodeType.Code;
   isBlock: true;
   code: string;
-  language?: CodeBlockLanguage | undefined;
+  language: CodeBlockLanguage;
   id: string;
 }
 
@@ -164,7 +167,7 @@ enum ParagraphStyleType {
   Heading2 = 'Heading 2',
   Heading1 = 'Heading 1',
   Heading3 = 'Heading 3',
-  Quote = 'Quote',
+  BlockQuote = 'BlockQuote',
   BulletList = 'Bullet List',
   NumberedList = 'Numbered List',
 }
@@ -195,8 +198,8 @@ interface Heading1ParagraphStyle extends ParagraphStyleBase {
 interface Heading3ParagraphStyle extends ParagraphStyleBase {
   type: ParagraphStyleType.Heading3;
 }
-interface QuoteParagraphStyle extends ParagraphStyleBase {
-  type: ParagraphStyleType.Quote;
+interface BlockQuote extends ParagraphStyleBase {
+  type: ParagraphStyleType.BlockQuote;
 }
 interface BulletListParagraphStyle extends ParagraphStyleBase {
   type: ParagraphStyleType.BulletList;
@@ -212,7 +215,7 @@ type ParagraphStyle =
   | Heading2ParagraphStyle
   | Heading1ParagraphStyle
   | Heading3ParagraphStyle
-  | QuoteParagraphStyle
+  | BlockQuote
   | BulletListParagraphStyle
   | NumberedListParagraphStyle;
 
@@ -334,14 +337,14 @@ function makeHeading3Paragraph(
     id,
   );
 }
-function makeQuoteParagraph(
+function makeBlockQuoteParagraph(
   children: InlineNode[],
   id: string,
   styleBase?: ParagraphStyleBase,
 ): ParagraphNode {
   return makeParagraph(
     children,
-    { type: ParagraphStyleType.Quote, ...styleBase },
+    { type: ParagraphStyleType.BlockQuote, ...styleBase },
     id,
   );
 }
@@ -372,7 +375,7 @@ function makeNumberedListParagraph(
 
 function makeCodeBlock(
   code: string,
-  language: CodeBlockLanguage | undefined,
+  language: CodeBlockLanguage,
   id: string,
 ): CodeBlockNode {
   return {
@@ -455,6 +458,7 @@ function ReactTableNode_({
   return (
     <div className="table-container">
       <table
+        className="block-table"
         data-family={EditorFamilyType.Block}
         data-type={BlockNodeType.Table}
         data-id={value.id}
@@ -541,6 +545,102 @@ function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
 }
 const ReactBlockImageNode = memo(ReactBlockImageNode_);
 
+const prismTheme: PrismTheme = {
+  plain: {
+    color: '#bfc7d5',
+    backgroundColor: '#292d3e',
+  },
+  styles: [
+    {
+      types: ['comment'],
+      style: {
+        color: 'rgb(105, 112, 152)',
+        fontStyle: 'italic',
+      },
+    },
+    {
+      types: ['string'],
+      style: {
+        color: 'rgb(195, 232, 141)',
+      },
+    },
+    {
+      types: ['number'],
+      style: {
+        color: '#b5cea8',
+      },
+    },
+    {
+      types: ['builtin', 'char', 'constant', 'function'],
+      style: {
+        color: 'rgb(130, 170, 255)',
+      },
+    },
+    {
+      types: ['class-name', 'maybe-class-name', 'known-class-name'],
+      style: {
+        color: '#3dc9b0',
+      },
+    },
+    {
+      types: ['punctuation', 'selector'],
+      style: {
+        color: 'rgb(199, 146, 234)',
+      },
+    },
+    {
+      types: ['variable', 'attr-name'],
+      style: {
+        color: 'rgb(255, 203, 107)',
+      },
+    },
+    {
+      types: ['tag'],
+      style: {
+        color: 'rgb(255, 85, 114)',
+      },
+    },
+    {
+      types: ['operator'],
+      style: {
+        color: 'rgb(137, 221, 255)',
+      },
+    },
+    {
+      types: ['boolean'],
+      style: {
+        color: 'rgb(255, 88, 116)',
+      },
+    },
+    {
+      types: ['keyword'],
+      style: {
+        color: '#C792EA',
+        fontStyle: 'italic',
+      },
+    },
+    {
+      types: ['doctype'],
+      style: {
+        color: 'rgb(199, 146, 234)',
+        fontStyle: 'italic',
+      },
+    },
+    {
+      types: ['namespace'],
+      style: {
+        color: 'rgb(178, 204, 214)',
+      },
+    },
+    {
+      types: ['url'],
+      style: {
+        color: 'rgb(221, 221, 221)',
+      },
+    },
+  ],
+};
+
 function ReactCodeBlockNode({
   value,
   editorId,
@@ -576,77 +676,249 @@ function ReactCodeBlockNode({
       data: {
         type: DataTransferType.Rich,
         value: makeEditorValue(
-          [makeCodeBlock(code || '', value.language, value.id)],
+          [makeCodeBlock(code, value.language, value.id)],
           '',
         ),
       },
     });
   };
+  const isLoading = height === 0;
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
   }, []);
+  const loadingInner =
+    isLoading &&
+    (value.language !== CodeBlockLanguage.PlainText ? (
+      <Highlight
+        {...defaultProps}
+        code={value.code}
+        theme={prismTheme}
+        language={
+          (
+            {
+              [CodeBlockLanguage.Css]: 'css',
+              [CodeBlockLanguage.Html]: 'markup',
+              [CodeBlockLanguage.Js]: 'jsx',
+              [CodeBlockLanguage.Json]: 'json',
+              [CodeBlockLanguage.Ts]: 'tsx',
+              [CodeBlockLanguage.Vue]: 'markup',
+            } as const
+          )[value.language]
+        }
+      >
+        {({ className, style, tokens, getLineProps, getTokenProps }) => (
+          <table style={omit(style, ['backgroundColor'])} aria-hidden="true">
+            <tbody>
+              {tokens.map((line, i) => (
+                <tr key={i}>
+                  <td className="code-block-container__line-number">{i + 1}</td>
+                  <td className="code-block-container__line-code">
+                    {line.map((token, key) => (
+                      // eslint-disable-next-line react/jsx-key
+                      <span
+                        {...omit(getTokenProps({ token, key }), ['key'])}
+                        key={key}
+                      />
+                    ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Highlight>
+    ) : (
+      <table aria-hidden="true">
+        <tbody>
+          {value.code.split('\n').map((lineCode, i) => (
+            <tr key={i}>
+              <td className="code-block-container__line-number">{i + 1}</td>
+              <td className="code-block-container__line-code">{lineCode}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    ));
+  function switchLang(lang: CodeBlockLanguage): void {
+    if (lang === value.language) {
+      return;
+    }
+    queueCommand({
+      type: CommandType.Input,
+      selection: {
+        type: SelectionType.Block,
+        editorId,
+        start: {
+          type: BlockSelectionPointType.OtherBlock,
+          blockId: value.id,
+        },
+        end: {
+          type: BlockSelectionPointType.OtherBlock,
+          blockId: value.id,
+        },
+      },
+      inputType: 'x_ReplaceBlock_MergeHistory',
+      data: {
+        type: DataTransferType.Rich,
+        value: makeEditorValue([makeCodeBlock(value.code, lang, value.id)], ''),
+      },
+    });
+  }
+  const langOptions: Record<CodeBlockLanguage, string> = {
+    [CodeBlockLanguage.Css]: 'CSS',
+    [CodeBlockLanguage.Html]: 'HTML',
+    [CodeBlockLanguage.Js]: 'Javascript',
+    [CodeBlockLanguage.Json]: 'JSON',
+    [CodeBlockLanguage.Ts]: 'Typescript',
+    [CodeBlockLanguage.Vue]: 'Vue JS',
+    [CodeBlockLanguage.PlainText]: 'Plain Text',
+  };
+  const CopyState$AllowCopy = 0;
+  const CopyState$CopySuccess = 1;
+  const CopyState$CopyFail = 2;
+  const { 0: copyState, 1: setCopyState } = useState<
+    | typeof CopyState$AllowCopy
+    | typeof CopyState$CopySuccess
+    | typeof CopyState$CopyFail
+  >(CopyState$AllowCopy);
+  const onCopyButtonClick = () => {
+    navigator.clipboard.writeText(value.code).then(
+      () => {
+        setCopyState(CopyState$CopySuccess);
+      },
+      () => setCopyState(CopyState$CopyFail),
+    );
+  };
+  useEffect(() => {
+    if (copyState === CopyState$AllowCopy) {
+      return;
+    }
+    const delay = copyState === CopyState$CopyFail ? 2000 : 1000;
+    const timeoutHandle = setTimeout(() => {
+      setCopyState(CopyState$AllowCopy);
+    }, delay);
+    return () => {
+      clearTimeout(timeoutHandle);
+    };
+  }, [copyState, setCopyState]);
   return (
     <div
-      className="code-block-container"
+      className={[
+        'code-block-container',
+        !isLoading && 'code-block-container--loaded',
+      ].join(' ')}
       contentEditable={false}
       data-family={EditorFamilyType.Block}
       data-type={BlockNodeType.Code}
       data-id={value.id}
     >
-      {isClient && (
-        <MonacoEditor
-          language={
-            value.language === CodeBlockLanguage.Vue
-              ? CodeBlockLanguage.Html
-              : value.language
-          }
-          value={value.code}
-          height={height}
-          options={{
-            scrollBeyondLastLine: false,
-            wordWrap: 'on',
-            wrappingStrategy: 'advanced',
-            minimap: {
-              enabled: false,
-            },
-            overviewRulerLanes: 0,
-            renderWhitespace: 'none',
-            guides: {
-              indentation: false,
-            },
-            renderLineHighlightOnlyWhenFocus: true,
-            scrollbar: {
-              handleMouseWheel: false,
-            },
-            fontSize: 16,
-            fontFamily: codeFont.style.fontFamily,
-            fontWeight: '400',
-            fontLigatures: true,
-            tabIndex: -1,
-          }}
-          theme={'my-theme'}
-          onMount={(editor) => {
-            // @ts-expect-error
-            editor.getModel()._isVue = value.language === CodeBlockLanguage.Vue;
-            editorRef.current = editor;
-            setHeight(editor.getContentHeight());
-            editor.onDidContentSizeChange(() => {
-              const contentHeight = editor.getContentHeight();
-              setHeight(contentHeight);
-            });
-            editor.onDidBlurEditorText(() => {
-              monacoP.then((monaco) => {
-                editor.setSelection(new monaco.Selection(0, 0, 0, 0));
-              });
-            });
-            setTimeout(() => {
-              editor.getAction('editor.action.formatDocument')?.run();
-            }, 1000);
-          }}
-          onChange={(code) => callback.current(code)}
-        />
-      )}
+      <pre
+        className={[
+          'code-block-container',
+          value.language && 'code-block-container__has-lang',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+        style={
+          {
+            '--bg-color': prismTheme.plain.backgroundColor,
+          } as React.CSSProperties
+        }
+      >
+        <button
+          type="button"
+          className="code-block-container__copy-button"
+          aria-label="Copy Code to Clipboard"
+          title="Copy Code to Clipboard"
+          aria-hidden="true"
+          disabled={copyState !== CopyState$AllowCopy}
+          tabIndex={-1}
+          onClick={onCopyButtonClick}
+        >
+          {copyState === CopyState$AllowCopy
+            ? 'Copy'
+            : copyState === CopyState$CopySuccess
+            ? 'Copied'
+            : 'Copy Failed'}
+        </button>
+        <div className="code-block-container__lang-select-container">
+          <select
+            className="code-block-container__lang-select-container__select"
+            value={value.language}
+            onChange={(event) => {
+              switchLang(event.target.value as CodeBlockLanguage);
+            }}
+          >
+            {Object.entries(langOptions).map(([lang, langDisplayText]) => (
+              <option value={lang} key={lang}>
+                {langDisplayText}
+              </option>
+            ))}
+          </select>
+        </div>
+        <code className="code-block-container__code">
+          {isLoading && (
+            <span className={'code-block-container__accessibility-hidden-text'}>
+              {value.code}
+            </span>
+          )}
+          {!isClient ? (
+            loadingInner
+          ) : (
+            <MonacoEditor
+              loading={loadingInner}
+              language={
+                value.language === CodeBlockLanguage.Vue
+                  ? CodeBlockLanguage.Html
+                  : value.language
+              }
+              value={value.code}
+              height={height}
+              options={{
+                scrollBeyondLastLine: false,
+                wordWrap: 'on',
+                wrappingStrategy: 'advanced',
+                minimap: {
+                  enabled: false,
+                },
+                overviewRulerLanes: 0,
+                renderWhitespace: 'none',
+                guides: {
+                  indentation: false,
+                },
+                renderLineHighlightOnlyWhenFocus: true,
+                scrollbar: {
+                  handleMouseWheel: false,
+                },
+                fontSize: 16,
+                fontFamily: codeFont.style.fontFamily,
+                fontWeight: '400',
+                fontLigatures: true,
+                tabIndex: -1,
+                lineNumbersMinChars: 0,
+              }}
+              theme={'my-theme'}
+              onMount={(editor) => {
+                // @ts-expect-error
+                editor.getModel()._isVue =
+                  value.language === CodeBlockLanguage.Vue;
+                editorRef.current = editor;
+                function updateHeight(): void {
+                  const contentHeight = editor.getContentHeight();
+                  setHeight(editor.getContentHeight());
+                }
+                updateHeight();
+                editor.onDidContentSizeChange(updateHeight);
+                setTimeout(() => {
+                  editor.getAction('editor.action.formatDocument')?.run();
+                }, 1000);
+              }}
+              onChange={(code) => callback.current(code)}
+            />
+          )}
+        </code>
+      </pre>
     </div>
   );
 }
@@ -854,12 +1126,11 @@ function ReactParagraphNode_(
         : undefined,
     marginLeft: value.style.indentLevel && `${value.style.indentLevel * 2}em`,
   };
-  let cn = 'paragraph-container';
   switch (value.style.type) {
     case ParagraphStyleType.Default: {
       return (
         <p
-          className={cn}
+          className="paragraph-container--with-toplevel-padding"
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -873,7 +1144,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.Heading2: {
       return (
         <h2
-          className={cn}
+          className="paragraph-container--with-toplevel-padding"
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -887,7 +1158,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.Heading1: {
       return (
         <h1
-          className={cn}
+          className="paragraph-container--with-toplevel-padding"
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -901,7 +1172,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.Heading3: {
       return (
         <h3
-          className={cn}
+          className="paragraph-container--with-toplevel-padding"
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -912,10 +1183,9 @@ function ReactParagraphNode_(
         </h3>
       );
     }
-    case ParagraphStyleType.Quote: {
+    case ParagraphStyleType.BlockQuote: {
       return (
         <blockquote
-          className={cn}
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -929,7 +1199,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.BulletList: {
       return (
         <li
-          className={cn}
+          className="paragraph-container--with-toplevel-padding"
           style={omit(style, ['marginLeft'])}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -943,7 +1213,7 @@ function ReactParagraphNode_(
     case ParagraphStyleType.NumberedList: {
       return (
         <li
-          className={cn}
+          className="paragraph-container--with-toplevel-padding"
           style={omit(style, ['marginLeft'])}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -991,6 +1261,7 @@ function ReactTextNode({
       text = (
         <code
           className={[
+            'inline-code',
             isFirst && isFirstCode && 'code-first',
             isLast && isLastCode && 'code-last',
           ]
@@ -1007,14 +1278,11 @@ function ReactTextNode({
     if (value.style.script === TextScript.Subscript) {
       text = <sub>{text}</sub>;
     }
-    const cn = value.style.code ? codeFont.className : mainFont.className;
     if (typeof text !== 'string' && !Array.isArray(text)) {
       return cloneElement(text, {
         className:
           'inline-text' +
-          (text.props.className ? ' ' + text.props.className : '') +
-          ' ' +
-          cn,
+          (text.props.className ? ' ' + text.props.className : ''),
         'data-family': EditorFamilyType.Inline,
         'data-type': InlineNodeType.Text,
         'data-paragraph-offset-start': start,
@@ -1024,7 +1292,7 @@ function ReactTextNode({
     }
     return (
       <span
-        className={'inline-text' + ' ' + cn}
+        className="inline-text"
         data-family={EditorFamilyType.Inline}
         data-type={InlineNodeType.Text}
         data-paragraph-offset-start={start}
@@ -1129,7 +1397,8 @@ function ReactEditorValue_({
           <ol
             key={items[0].id}
             start={listBlockIdToIdx[items[0].id] + 1}
-            style={{ paddingLeft: `${(indent + 1) * 2}em` }}
+            data-indent={indent}
+            // style={{ paddingLeft: `${(indent + 1) * 2}em` }}
           >
             {listNodes}
           </ol>,
@@ -1138,7 +1407,8 @@ function ReactEditorValue_({
         children.push(
           <ul
             key={items[0].id}
-            style={{ paddingLeft: `${(indent + 1) * 2}em` }}
+            data-indent={indent}
+            // style={{ paddingLeft: `${(indent + 1) * 2}em` }}
           >
             {listNodes}
           </ul>,
@@ -3535,7 +3805,7 @@ const isSubscript = allPass([
 const isHeading1 = allPass([hasCommandOptionKey, hasKeyCode(ONE)]);
 const isHeading2 = allPass([hasCommandOptionKey, hasKeyCode(TWO)]);
 const isHeading3 = allPass([hasCommandOptionKey, hasKeyCode(THREE)]);
-const isQuote = allPass([
+const isBlockQuote = allPass([
   hasCommandModifier,
   not(hasShiftKey),
   hasKeyCode(QUOTE),
@@ -4352,25 +4622,27 @@ const cmds = {
       },
     ],
   },
-  quote: {
-    isKey: isQuote,
+  'block quote': {
+    isKey: isBlockQuote,
     icon: {
       isActive: (c) =>
         isParagraphStyleActive(
           c.value,
           c.selection!,
-          (style) => style.type === ParagraphStyleType.Quote,
+          (style) => style.type === ParagraphStyleType.BlockQuote,
         ),
-      Icon: QuoteIcon,
+      Icon: BlockQuoteIcon,
     },
     getCmds: (selection) => [
       {
         type: CommandType.BlockFormat,
         selection,
-        condition: (style) => style.type === ParagraphStyleType.Quote,
+        condition: (style) => style.type === ParagraphStyleType.BlockQuote,
         transform: (style, active) => ({
           ...style,
-          type: active ? ParagraphStyleType.Default : ParagraphStyleType.Quote,
+          type: active
+            ? ParagraphStyleType.Default
+            : ParagraphStyleType.BlockQuote,
         }),
       },
     ],
@@ -4972,7 +5244,12 @@ function getTextStylesFromElement(
   }
 
   return {
-    bold: Number(fontWeight) >= 600 ? true : undefined,
+    bold:
+      Number(fontWeight) >= 600 ||
+      fontWeight === 'bold' ||
+      fontWeight === 'bolder'
+        ? true
+        : undefined,
     italic:
       fontStyle === 'italic' || fontStyle === 'oblique' ? true : undefined,
     underline: textDecorationLine === 'underline' ? true : undefined,
@@ -5127,7 +5404,7 @@ function convertFromElToEditorValue(
           }
         }
         if (blockEl.tagName.toLowerCase().startsWith('blockquote')) {
-          return makeQuoteParagraph([], makeId(), paraStyleBase);
+          return makeBlockQuoteParagraph([], makeId(), paraStyleBase);
         }
       }
       return makeDefaultParagraph([], makeId(), paraStyleBase);
@@ -5341,19 +5618,19 @@ function convertFromElToEditorValue(
               }
               if (
                 n.nodeType === Node.ELEMENT_NODE &&
-                Array.from(n.parentElement!.classList).some(
+                Array.from((n as HTMLElement).classList).some(
                   (cls) => cls === 'gatsby-highlight-code-line',
                 )
               ) {
-                if (text) {
-                  text += '\n';
-                }
                 text += normalizeText(n.textContent || '');
+                text += '\n';
+                return NodeFilter.FILTER_REJECT;
               }
               if (isBlock(n)) {
                 const b = n as HTMLElement;
                 if (!b.innerText || b.innerText !== '\n') {
                   text += '\n';
+                  return NodeFilter.FILTER_REJECT;
                 }
               }
               return NodeFilter.FILTER_ACCEPT;
@@ -5374,7 +5651,9 @@ function convertFromElToEditorValue(
             .replace(/^(\r|\n)+|(\r|\n)+$/g, ''),
           lang,
         );
-        blocks.push(makeCodeBlock(code, lang, makeId()));
+        blocks.push(
+          makeCodeBlock(code, lang || CodeBlockLanguage.PlainText, makeId()),
+        );
         prevBlockParent = undefined;
         continue;
       }
@@ -5426,9 +5705,11 @@ function convertFromElToEditorValue(
 }
 
 function ReactEditor({
+  placeholder,
   initialValue,
   makeId,
 }: {
+  placeholder: string;
   initialValue: EditorValue;
   makeId: () => string;
 }): JSX.Element {
@@ -5893,7 +6174,7 @@ function ReactEditor({
             if (
               style.type === ParagraphStyleType.BulletList ||
               style.type === ParagraphStyleType.NumberedList ||
-              style.type === ParagraphStyleType.Quote ||
+              style.type === ParagraphStyleType.BlockQuote ||
               style.hangingIndent ||
               style.indentLevel ||
               (style.align && style.align !== TextAlign.Left)
@@ -5916,7 +6197,7 @@ function ReactEditor({
                           ),
                         });
                       }
-                      if (style.type === ParagraphStyleType.Quote) {
+                      if (style.type === ParagraphStyleType.BlockQuote) {
                         return makeDefaultParagraph(
                           para.children,
                           para.id,
@@ -5933,7 +6214,7 @@ function ReactEditor({
                                 type:
                                   | ParagraphStyleType.BulletList
                                   | ParagraphStyleType.NumberedList
-                                  | ParagraphStyleType.Quote;
+                                  | ParagraphStyleType.BlockQuote;
                               }
                             >,
                             ['hangingIndent'],
@@ -5951,7 +6232,7 @@ function ReactEditor({
                                 type:
                                   | ParagraphStyleType.BulletList
                                   | ParagraphStyleType.NumberedList
-                                  | ParagraphStyleType.Quote;
+                                  | ParagraphStyleType.BlockQuote;
                               }
                             >,
                             ['indentLevel'],
@@ -5968,7 +6249,7 @@ function ReactEditor({
                               type:
                                 | ParagraphStyleType.BulletList
                                 | ParagraphStyleType.NumberedList
-                                | ParagraphStyleType.Quote;
+                                | ParagraphStyleType.BlockQuote;
                             }
                           >,
                           ['align'],
@@ -6262,6 +6543,40 @@ function ReactEditor({
         });
       }
       return;
+    }
+
+    if (
+      hasPlaceholder &&
+      placeholderRef.current &&
+      (nativeSelection.anchorNode === placeholderRef.current ||
+        nativeSelection.focusNode === placeholderRef.current ||
+        placeholderRef.current.contains(nativeSelection.anchorNode) ||
+        placeholderRef.current.contains(nativeSelection.focusNode))
+    ) {
+      editorCtrl.current = pushState(
+        editorCtrl.current,
+        editorCtrl.current.value,
+        {
+          type: SelectionType.Block,
+          editorId: editorCtrl.current.value.id,
+          start: {
+            type: BlockSelectionPointType.Paragraph,
+            blockId: editorCtrl.current.value.blocks[0].id,
+            offset: 0,
+          },
+          end: {
+            type: BlockSelectionPointType.Paragraph,
+            blockId: editorCtrl.current.value.blocks[0].id,
+            offset: 0,
+          },
+        },
+        editorCtrl.current.textStyle,
+        PushStateAction.Selection,
+      );
+      updateSelection(editorCtrl.current.selection!);
+      flushSync(() => {
+        setRenderToggle((t) => !t);
+      });
     }
 
     const curSelection = findSelection(
@@ -6574,6 +6889,24 @@ function ReactEditor({
       );
     },
   );
+  const hasPlaceholder =
+    editorCtrl.current.value.blocks.length === 1 &&
+    editorCtrl.current.value.blocks[0].type === BlockNodeType.Paragraph &&
+    getParagraphLength(editorCtrl.current.value.blocks[0]) === 0 &&
+    Object.keys(editorCtrl.current.value.blocks[0].children[0].style).every(
+      (k) =>
+        (
+          (editorCtrl.current.value.blocks[0] as ParagraphNode)
+            .children[0] as TextNode
+        ).style[k as keyof TextStyle] === undefined,
+    ) &&
+    Object.keys(editorCtrl.current.value.blocks[0].style).every(
+      (k) =>
+        (editorCtrl.current.value.blocks[0] as ParagraphNode).style[
+          k as keyof ParagraphStyle
+        ] === (k === 'type' ? ParagraphStyleType.Default : undefined),
+    );
+  const placeholderRef = useRef<HTMLDivElement | null>(null);
   return (
     <>
       <div className="toolbar" onMouseDown={onEditorToolbarMouseDown}>
@@ -6622,6 +6955,15 @@ function ReactEditor({
         ref={editorRef}
         className="editor"
       >
+        {isClient && hasPlaceholder && (
+          <div
+            className="editor__placeholder"
+            contentEditable={false}
+            ref={placeholderRef}
+          >
+            {placeholder}
+          </div>
+        )}
         <SelectedEditorsContext.Provider value={selectedEditors}>
           <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
             <ReactEditorValue
@@ -6813,7 +7155,7 @@ function CodeBlockIcon(props: ToolbarIconProps): JSX.Element {
   );
 }
 
-function QuoteIcon(props: ToolbarIconProps): JSX.Element {
+function BlockQuoteIcon(props: ToolbarIconProps): JSX.Element {
   return (
     <ToolbarIcon
       version="1.1"
@@ -6872,10 +7214,19 @@ export default function Home() {
   }
 
   return (
-    <div className="page">
+    <div
+      className="page"
+      style={
+        {
+          '--main-font': mainFont.style.fontFamily,
+          '--code-font': codeFont.style.fontFamily,
+        } as React.CSSProperties
+      }
+    >
       <div className="page__inner">
         <main className="editor-wrapper">
           <ReactEditor
+            placeholder="Type here..."
             initialValue={require('./initialState.json')}
             makeId={id}
           />
