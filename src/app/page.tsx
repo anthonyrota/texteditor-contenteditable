@@ -756,7 +756,6 @@ function ReactCodeBlockNode_({
                   <td className="code-block-container__line-number">{i + 1}</td>
                   <td className="code-block-container__line-code">
                     {line.map((token, key) => (
-                      // eslint-disable-next-line react/jsx-key
                       <span
                         {...omit(getTokenProps({ token, key }), ['key'])}
                         key={key}
@@ -5977,38 +5976,73 @@ function ReactEditor({
     }
   };
 
-  function pushState(
-    curEditorCtrl: EditorController,
-    newValue: EditorValue,
-    newSelection: Selection | null,
-    newTextStyle: TextStyle,
-    action: PushStateAction | string,
-    merge = false,
-  ): EditorController {
-    let undos = curEditorCtrl.undos;
-    if (
-      !merge &&
-      action !== PushStateAction.Selection &&
-      (action === PushStateAction.Unique || curEditorCtrl.lastAction !== action)
-    ) {
-      undos = [...undos, curEditorCtrl];
-    }
-    let redos = curEditorCtrl.redos;
-    if (action !== PushStateAction.Selection) {
-      redos = [];
-    }
-    return {
-      value: newValue,
-      selection: newSelection,
-      textStyle: newTextStyle,
-      undos,
-      redos,
-      lastAction: merge ? curEditorCtrl.lastAction : action,
-      makeId,
-    };
-  }
+  const pushState = useCallback(
+    (
+      curEditorCtrl: EditorController,
+      newValue: EditorValue,
+      newSelection: Selection | null,
+      newTextStyle: TextStyle,
+      action: PushStateAction | string,
+      merge = false,
+    ): EditorController => {
+      let undos = curEditorCtrl.undos;
+      if (
+        !merge &&
+        action !== PushStateAction.Selection &&
+        (action === PushStateAction.Unique ||
+          curEditorCtrl.lastAction !== action)
+      ) {
+        undos = [...undos, curEditorCtrl];
+      }
+      let redos = curEditorCtrl.redos;
+      if (action !== PushStateAction.Selection) {
+        redos = [];
+      }
+      return {
+        value: newValue,
+        selection: newSelection,
+        textStyle: newTextStyle,
+        undos,
+        redos,
+        lastAction: merge ? curEditorCtrl.lastAction : action,
+        makeId,
+      };
+    },
+    [makeId],
+  );
 
-  const flushInputQueue = (): void => {
+  const copySelection = useCallback(
+    (value: EditorValue, selection: Selection): void => {
+      const curValue = extractSelection(value, selection);
+      useIsomorphicLayoutEffect = useEffect;
+      const htmlText = renderToStaticMarkup(
+        <>
+          <span data-matita={JSON.stringify(curValue)} />
+          <NumberedListIndicesContext.Provider
+            value={getListBlockIdToIdx(value)}
+          >
+            <ReactEditorValue value={curValue} />
+          </NumberedListIndicesContext.Provider>
+        </>,
+      );
+      useIsomorphicLayoutEffect = useLayoutEffect;
+      navigator.clipboard
+        .write([
+          new ClipboardItem({
+            'text/plain': new Blob([extractText(curValue)], {
+              type: 'text/plain',
+            }),
+            'text/html': new Blob([htmlText], { type: 'text/html' }),
+          }),
+        ])
+        .catch((error) => {
+          console.error('error writing to clipboard', error);
+        });
+    },
+    [],
+  );
+
+  const flushInputQueue = useCallback((): void => {
     inputQueueRequestRef.current = null;
     let mapSelectionFns: ((
       selection: Selection,
@@ -6599,6 +6633,18 @@ function ReactEditor({
             start: newPoint,
             end: newPoint,
           };
+          processCommand(
+            {
+              type: CommandType.Input,
+              inputType: 'insertText',
+              selection: originalSelection,
+              data: {
+                type: DataTransferType.Plain,
+                text: ' '
+              }
+            },
+            null,
+          );
           newEditorCtrl = pushState(
             newEditorCtrl,
             res.mappedEditor,
@@ -6645,7 +6691,7 @@ function ReactEditor({
         setRenderToggle((t) => !t);
       });
     }
-  };
+  }, [copySelection, makeId, pushState]);
 
   useEffect(() => {
     if (newDomSelectionRef.current !== null) {
@@ -6683,201 +6729,223 @@ function ReactEditor({
     );
   }
 
-  const onBeforeInput = (event: InputEvent): void => {
-    if (!isFocused()) {
-      return;
-    }
-    event.preventDefault();
-    const curNativeSelection = window.getSelection();
-    const targetRange =
-      event.getTargetRanges()[0] || curNativeSelection?.getRangeAt(0);
-    if (
-      hasPlaceholder &&
-      placeholderRef.current &&
-      (targetRange.startContainer === placeholderRef.current ||
-        targetRange.endContainer === placeholderRef.current ||
-        placeholderRef.current.contains(targetRange.startContainer) ||
-        placeholderRef.current.contains(targetRange.endContainer))
-    ) {
-      return;
-    }
-    let selection: Selection;
-    try {
-      selection = findSelection(editorCtrl.current.value, targetRange, false);
-    } catch (error) {
-      console.error('error finding selection', error);
-      return;
-    }
-    if (curNativeSelection) {
-      const nativeSelection = findSelection(
-        editorCtrl.current.value,
-        curNativeSelection!.getRangeAt(0),
-        isSelectionBackwards(curNativeSelection!),
-      );
-      if (
-        (nativeSelection.editorId === selection.editorId &&
-          nativeSelection.type === SelectionType.Table &&
-          selection.type === SelectionType.Table &&
-          nativeSelection.tableId === selection.tableId &&
-          nativeSelection.startCell.rowIndex === selection.endCell.rowIndex &&
-          nativeSelection.startCell.columnIndex ===
-            selection.endCell.columnIndex &&
-          nativeSelection.endCell.rowIndex === selection.startCell.rowIndex &&
-          nativeSelection.endCell.columnIndex ===
-            selection.startCell.columnIndex) ||
-        (nativeSelection.type === SelectionType.Block &&
-          selection.type === SelectionType.Block &&
-          nativeSelection.start.blockId === selection.end.blockId &&
-          ((nativeSelection.start.type === BlockSelectionPointType.OtherBlock &&
-            selection.end.type === BlockSelectionPointType.OtherBlock) ||
-            (nativeSelection.start.type === BlockSelectionPointType.Paragraph &&
-              selection.end.type === BlockSelectionPointType.Paragraph &&
-              nativeSelection.start.offset === selection.end.offset)) &&
-          nativeSelection.end.blockId === selection.start.blockId &&
-          ((nativeSelection.end.type === BlockSelectionPointType.OtherBlock &&
-            selection.start.type === BlockSelectionPointType.OtherBlock) ||
-            (nativeSelection.end.type === BlockSelectionPointType.Paragraph &&
-              selection.start.type === BlockSelectionPointType.Paragraph &&
-              nativeSelection.end.offset === selection.start.offset)))
-      ) {
-        selection = nativeSelection;
+  const hasPlaceholder =
+    editorCtrl.current.value.blocks.length === 1 &&
+    editorCtrl.current.value.blocks[0].type === BlockNodeType.Paragraph &&
+    getParagraphLength(editorCtrl.current.value.blocks[0]) === 0 &&
+    Object.keys(editorCtrl.current.textStyle).every(
+      (k) => editorCtrl.current.textStyle === undefined,
+    ) &&
+    Object.keys(editorCtrl.current.value.blocks[0].style).every(
+      (k) =>
+        (editorCtrl.current.value.blocks[0] as ParagraphNode).style[
+          k as keyof ParagraphStyle
+        ] === (k === 'type' ? ParagraphStyleType.Default : undefined),
+    );
+
+  const queueCommand = useCallback(
+    (command: Command): void => {
+      function isBatch(cmd: Command): boolean {
+        return (
+          cmd.type === CommandType.DeleteBackwardKey ||
+          cmd.type === CommandType.SpaceKey ||
+          (cmd.type === CommandType.InlineFormat &&
+            (
+              [
+                'bold shortcut',
+                'italic shortcut',
+                'underline shortcut',
+                'strikethrough shortcut',
+                'superscript shortcut',
+                'subscript shortcut',
+              ] as (string | undefined)[]
+            ).includes(command.origin)) ||
+          (cmd.type === CommandType.Input && cmd.inputType === 'deleteByDrag')
+        );
       }
-    }
-    let data: EditorDataTransfer | undefined;
-    function mapValue(value: EditorValue): EditorValue {
-      return makeEditorValue(
-        value.blocks.map((block) => {
-          if (block.type !== BlockNodeType.Paragraph) {
-            if (block.type === BlockNodeType.Table) {
-              return makeTable(
-                block.rows.map((row) =>
-                  makeTableRow(
-                    row.cells.map((cell) =>
-                      makeTableCell(mapValue(cell.value), makeId()),
-                    ),
-                    makeId(),
-                  ),
-                ),
-                block.numColumns,
-                makeId(),
-              );
-            }
-            return { ...block, id: makeId() };
-          }
-          return makeParagraph(
-            block.children.map((child) => ({ ...child, id: makeId() })),
-            block.style,
-            makeId(),
-          );
-        }),
-        makeId(),
-      );
-    }
-    if (event.dataTransfer) {
-      const html = event.dataTransfer.getData('text/html');
-      if (html) {
-        const parser = new DOMParser();
-        let parsedDocument: Document | null = null;
-        try {
-          parsedDocument = parser.parseFromString(html, 'text/html');
-        } catch (error) {
-          console.error(error);
+      if (inputQueueRef.current.length === 0) {
+        if (!isBatch(command)) {
+          inputQueueRef.current.push(command);
+          flushInputQueue();
+          return;
         }
-        if (parsedDocument !== null) {
-          const encodeNode = parsedDocument.querySelector('[data-matita]');
-          if (encodeNode) {
-            let value: EditorValue | null = null;
-            try {
-              value = JSON.parse(encodeNode.getAttribute('data-matita')!);
-            } catch (error) {
-              console.error(error);
+        inputQueueRequestRef.current = window.setTimeout(
+          flushInputQueue,
+          1000 / 60,
+        );
+      } else {
+        const lastCommand =
+          inputQueueRef.current[inputQueueRef.current.length - 1];
+        if (isBatch(lastCommand)) {
+          if (inputQueueRequestRef.current !== null) {
+            window.clearTimeout(inputQueueRequestRef.current!);
+          }
+          inputQueueRef.current.push(command);
+          flushInputQueue();
+          return;
+        }
+      }
+      inputQueueRef.current.push(command);
+    },
+    [flushInputQueue],
+  );
+
+  const onBeforeInput = useCallback(
+    (event: InputEvent): void => {
+      if (!isFocused()) {
+        return;
+      }
+      event.preventDefault();
+      const curNativeSelection = window.getSelection();
+      const targetRange =
+        event.getTargetRanges()[0] || curNativeSelection?.getRangeAt(0);
+      if (
+        hasPlaceholder &&
+        placeholderRef.current &&
+        (targetRange.startContainer === placeholderRef.current ||
+          targetRange.endContainer === placeholderRef.current ||
+          placeholderRef.current.contains(targetRange.startContainer) ||
+          placeholderRef.current.contains(targetRange.endContainer))
+      ) {
+        return;
+      }
+      let selection: Selection;
+      try {
+        selection = findSelection(editorCtrl.current.value, targetRange, false);
+      } catch (error) {
+        console.error('error finding selection', error);
+        return;
+      }
+      if (curNativeSelection) {
+        const nativeSelection = findSelection(
+          editorCtrl.current.value,
+          curNativeSelection!.getRangeAt(0),
+          isSelectionBackwards(curNativeSelection!),
+        );
+        if (
+          (nativeSelection.editorId === selection.editorId &&
+            nativeSelection.type === SelectionType.Table &&
+            selection.type === SelectionType.Table &&
+            nativeSelection.tableId === selection.tableId &&
+            nativeSelection.startCell.rowIndex === selection.endCell.rowIndex &&
+            nativeSelection.startCell.columnIndex ===
+              selection.endCell.columnIndex &&
+            nativeSelection.endCell.rowIndex === selection.startCell.rowIndex &&
+            nativeSelection.endCell.columnIndex ===
+              selection.startCell.columnIndex) ||
+          (nativeSelection.type === SelectionType.Block &&
+            selection.type === SelectionType.Block &&
+            nativeSelection.start.blockId === selection.end.blockId &&
+            ((nativeSelection.start.type ===
+              BlockSelectionPointType.OtherBlock &&
+              selection.end.type === BlockSelectionPointType.OtherBlock) ||
+              (nativeSelection.start.type ===
+                BlockSelectionPointType.Paragraph &&
+                selection.end.type === BlockSelectionPointType.Paragraph &&
+                nativeSelection.start.offset === selection.end.offset)) &&
+            nativeSelection.end.blockId === selection.start.blockId &&
+            ((nativeSelection.end.type === BlockSelectionPointType.OtherBlock &&
+              selection.start.type === BlockSelectionPointType.OtherBlock) ||
+              (nativeSelection.end.type === BlockSelectionPointType.Paragraph &&
+                selection.start.type === BlockSelectionPointType.Paragraph &&
+                nativeSelection.end.offset === selection.start.offset)))
+        ) {
+          selection = nativeSelection;
+        }
+      }
+      let data: EditorDataTransfer | undefined;
+      function mapValue(value: EditorValue): EditorValue {
+        return makeEditorValue(
+          value.blocks.map((block) => {
+            if (block.type !== BlockNodeType.Paragraph) {
+              if (block.type === BlockNodeType.Table) {
+                return makeTable(
+                  block.rows.map((row) =>
+                    makeTableRow(
+                      row.cells.map((cell) =>
+                        makeTableCell(mapValue(cell.value), makeId()),
+                      ),
+                      makeId(),
+                    ),
+                  ),
+                  block.numColumns,
+                  makeId(),
+                );
+              }
+              return { ...block, id: makeId() };
             }
-            if (value !== null) {
+            return makeParagraph(
+              block.children.map((child) => ({ ...child, id: makeId() })),
+              block.style,
+              makeId(),
+            );
+          }),
+          makeId(),
+        );
+      }
+      if (event.dataTransfer) {
+        const html = event.dataTransfer.getData('text/html');
+        if (html) {
+          const parser = new DOMParser();
+          let parsedDocument: Document | null = null;
+          try {
+            parsedDocument = parser.parseFromString(html, 'text/html');
+          } catch (error) {
+            console.error(error);
+          }
+          if (parsedDocument !== null) {
+            const encodeNode = parsedDocument.querySelector('[data-matita]');
+            if (encodeNode) {
+              let value: EditorValue | null = null;
+              try {
+                value = JSON.parse(encodeNode.getAttribute('data-matita')!);
+              } catch (error) {
+                console.error(error);
+              }
+              if (value !== null) {
+                data = {
+                  type: DataTransferType.Rich,
+                  value: mapValue(value),
+                };
+              }
+            }
+            if (!data) {
               data = {
                 type: DataTransferType.Rich,
-                value: mapValue(value),
+                value: convertFromElToEditorValue(
+                  parsedDocument,
+                  parsedDocument.body,
+                  makeId,
+                ),
               };
             }
           }
-          if (!data) {
+        }
+        if (!data) {
+          const plain = event.dataTransfer.getData('text/plain');
+          if (plain) {
             data = {
-              type: DataTransferType.Rich,
-              value: convertFromElToEditorValue(
-                parsedDocument,
-                parsedDocument.body,
-                makeId,
-              ),
+              type: DataTransferType.Plain,
+              text: plain,
             };
           }
         }
       }
-      if (!data) {
-        const plain = event.dataTransfer.getData('text/plain');
-        if (plain) {
-          data = {
-            type: DataTransferType.Plain,
-            text: plain,
-          };
-        }
+      if (!data && event.data) {
+        data = {
+          type: DataTransferType.Plain,
+          text: event.data,
+        };
       }
-    }
-    if (!data && event.data) {
-      data = {
-        type: DataTransferType.Plain,
-        text: event.data,
-      };
-    }
-    queueCommand({
-      type: CommandType.Input,
-      inputType: event.inputType,
-      selection,
-      data,
-    });
-  };
-
-  function queueCommand(command: Command): void {
-    function isBatch(cmd: Command): boolean {
-      return (
-        cmd.type === CommandType.DeleteBackwardKey ||
-        cmd.type === CommandType.SpaceKey ||
-        (cmd.type === CommandType.InlineFormat &&
-          (
-            [
-              'bold shortcut',
-              'italic shortcut',
-              'underline shortcut',
-              'strikethrough shortcut',
-              'superscript shortcut',
-              'subscript shortcut',
-            ] as (string | undefined)[]
-          ).includes(command.origin)) ||
-        (cmd.type === CommandType.Input && cmd.inputType === 'deleteByDrag')
-      );
-    }
-    if (inputQueueRef.current.length === 0) {
-      if (!isBatch(command)) {
-        inputQueueRef.current.push(command);
-        flushInputQueue();
-        return;
-      }
-      inputQueueRequestRef.current = window.setTimeout(
-        flushInputQueue,
-        1000 / 60,
-      );
-    } else {
-      const lastCommand =
-        inputQueueRef.current[inputQueueRef.current.length - 1];
-      if (isBatch(lastCommand)) {
-        if (inputQueueRequestRef.current !== null) {
-          window.clearTimeout(inputQueueRequestRef.current!);
-        }
-        inputQueueRef.current.push(command);
-        flushInputQueue();
-        return;
-      }
-    }
-    inputQueueRef.current.push(command);
-  }
+      queueCommand({
+        type: CommandType.Input,
+        inputType: event.inputType,
+        selection,
+        data,
+      });
+    },
+    [hasPlaceholder, makeId, queueCommand],
+  );
 
   useEffect(() => {
     return () => {
@@ -6887,181 +6955,165 @@ function ReactEditor({
     };
   }, []);
 
-  const onHTMLSelectionChange = (event: Event): void => {
-    if (isUpdatingSelection.current > 0) {
-      return;
-    }
+  const onHTMLSelectionChange = useCallback(
+    (event: Event): void => {
+      if (isUpdatingSelection.current > 0) {
+        return;
+      }
 
-    const nativeSelection = window.getSelection()!;
+      const nativeSelection = window.getSelection()!;
 
-    if (
-      document.activeElement &&
-      editorRef.current!.contains(document.activeElement) &&
-      nativeSelection.anchorNode &&
-      closest(nativeSelection.anchorNode, '.monaco-editor')
-    ) {
-      const blockId = closest(
-        nativeSelection.anchorNode!,
-        `[data-type="${BlockNodeType.Code}"]`,
-      )!.getAttribute('data-id')!;
-      const editorId = closest(
-        nativeSelection.anchorNode!,
-        `[data-family="${EditorFamilyType.Editor}"]`,
-      )!.getAttribute('data-id')!;
-      queueCommand({
-        type: CommandType.Selection,
-        selection: {
+      if (
+        document.activeElement &&
+        editorRef.current!.contains(document.activeElement) &&
+        nativeSelection.anchorNode &&
+        closest(nativeSelection.anchorNode, '.monaco-editor')
+      ) {
+        const blockId = closest(
+          nativeSelection.anchorNode!,
+          `[data-type="${BlockNodeType.Code}"]`,
+        )!.getAttribute('data-id')!;
+        const editorId = closest(
+          nativeSelection.anchorNode!,
+          `[data-family="${EditorFamilyType.Editor}"]`,
+        )!.getAttribute('data-id')!;
+        queueCommand({
+          type: CommandType.Selection,
+          selection: {
+            type: SelectionType.Block,
+            editorId,
+            start: {
+              type: BlockSelectionPointType.OtherBlock,
+              blockId,
+            },
+            end: {
+              type: BlockSelectionPointType.OtherBlock,
+              blockId,
+            },
+          },
+          doNotUpdateSelection: true,
+          mergeLast: true,
+        });
+        return;
+      }
+
+      if (!isFocused() || nativeSelection.rangeCount === 0) {
+        queueCommand({
+          type: CommandType.Selection,
+          selection: null,
+        });
+        return;
+      }
+
+      if (
+        hasPlaceholder &&
+        placeholderRef.current &&
+        (nativeSelection.anchorNode === placeholderRef.current ||
+          nativeSelection.focusNode === placeholderRef.current ||
+          placeholderRef.current.contains(nativeSelection.anchorNode) ||
+          placeholderRef.current.contains(nativeSelection.focusNode))
+      ) {
+        const curSelection: Selection = {
           type: SelectionType.Block,
-          editorId,
+          editorId: editorCtrl.current.value.id,
           start: {
-            type: BlockSelectionPointType.OtherBlock,
-            blockId,
+            type: BlockSelectionPointType.Paragraph,
+            blockId: editorCtrl.current.value.blocks[0].id,
+            offset: 0,
           },
           end: {
-            type: BlockSelectionPointType.OtherBlock,
-            blockId,
+            type: BlockSelectionPointType.Paragraph,
+            blockId: editorCtrl.current.value.blocks[0].id,
+            offset: 0,
           },
-        },
-        doNotUpdateSelection: true,
-        mergeLast: true,
-      });
-      return;
-    }
+        };
+        queueCommand({
+          type: CommandType.Selection,
+          selection: curSelection,
+        });
+        return;
+      }
 
-    if (!isFocused() || nativeSelection.rangeCount === 0) {
-      queueCommand({
-        type: CommandType.Selection,
-        selection: null,
-      });
-      return;
-    }
-
-    if (
-      hasPlaceholder &&
-      placeholderRef.current &&
-      (nativeSelection.anchorNode === placeholderRef.current ||
-        nativeSelection.focusNode === placeholderRef.current ||
-        placeholderRef.current.contains(nativeSelection.anchorNode) ||
-        placeholderRef.current.contains(nativeSelection.focusNode))
-    ) {
-      const curSelection: Selection = {
-        type: SelectionType.Block,
-        editorId: editorCtrl.current.value.id,
-        start: {
-          type: BlockSelectionPointType.Paragraph,
-          blockId: editorCtrl.current.value.blocks[0].id,
-          offset: 0,
-        },
-        end: {
-          type: BlockSelectionPointType.Paragraph,
-          blockId: editorCtrl.current.value.blocks[0].id,
-          offset: 0,
-        },
-      };
+      let curSelection: Selection;
+      try {
+        curSelection = findSelection(
+          editorCtrl.current.value,
+          nativeSelection.getRangeAt(0),
+          isSelectionBackwards(nativeSelection),
+        );
+      } catch (error) {
+        console.error(
+          'error finding selection',
+          document.activeElement,
+          nativeSelection.anchorNode,
+          nativeSelection.focusNode,
+        );
+        return;
+      }
       queueCommand({
         type: CommandType.Selection,
         selection: curSelection,
       });
-    }
+    },
+    [hasPlaceholder, queueCommand],
+  );
 
-    let curSelection: Selection;
-    try {
-      curSelection = findSelection(
+  const onCopy = useCallback(
+    (event: ClipboardEvent): void => {
+      const nativeSelection = window.getSelection();
+      if (!nativeSelection || !isFocused()) {
+        return;
+      }
+      const curSelection = findSelection(
         editorCtrl.current.value,
         nativeSelection.getRangeAt(0),
         isSelectionBackwards(nativeSelection),
       );
-    } catch (error) {
-      console.error(
-        'error finding selection',
-        document.activeElement,
-        nativeSelection.anchorNode,
-        nativeSelection.focusNode,
-      );
-      return;
-    }
-    queueCommand({
-      type: CommandType.Selection,
-      selection: curSelection,
-    });
-  };
-
-  function copySelection(value: EditorValue, selection: Selection): void {
-    const curValue = extractSelection(value, selection);
-    useIsomorphicLayoutEffect = useEffect;
-    const htmlText = renderToStaticMarkup(
-      <>
-        <span data-matita={JSON.stringify(curValue)} />
-        <NumberedListIndicesContext.Provider value={getListBlockIdToIdx(value)}>
-          <ReactEditorValue value={curValue} />
-        </NumberedListIndicesContext.Provider>
-      </>,
-    );
-    useIsomorphicLayoutEffect = useLayoutEffect;
-    navigator.clipboard
-      .write([
-        new ClipboardItem({
-          'text/plain': new Blob([extractText(curValue)], {
-            type: 'text/plain',
-          }),
-          'text/html': new Blob([htmlText], { type: 'text/html' }),
-        }),
-      ])
-      .catch((error) => {
-        console.error('error writing to clipboard', error);
-      });
-  }
-
-  const onCopy = (event: ClipboardEvent): void => {
-    const nativeSelection = window.getSelection();
-    if (!nativeSelection || !isFocused()) {
-      return;
-    }
-    const curSelection = findSelection(
-      editorCtrl.current.value,
-      nativeSelection.getRangeAt(0),
-      isSelectionBackwards(nativeSelection),
-    );
-    if (!isCollapsed(curSelection)) {
-      copySelection(editorCtrl.current.value, curSelection);
-    }
-    event.preventDefault();
-  };
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    const curSelection = window.getSelection();
-    if (!curSelection || !isFocused()) {
-      return;
-    }
-    const sel = findSelection(
-      editorCtrl.current.value,
-      curSelection.getRangeAt(0),
-      isSelectionBackwards(curSelection),
-    );
-    const cmdKV = Object.entries(cmds);
-    for (let i = 0; i < cmdKV.length; i++) {
-      const [_name, cmd] = cmdKV[i];
-      if (cmd.isKey(event)) {
-        if (
-          cmd === cmds['delete backward']
-            ? sel.editorId === editorCtrl.current.value.id &&
-              isCollapsed(sel) &&
-              (sel as BlockSelection).start.type ===
-                BlockSelectionPointType.Paragraph &&
-              (sel as BlockSelection).start.blockId ===
-                editorCtrl.current.value.blocks[0].id &&
-              ((sel as BlockSelection).start as ParagraphPoint).offset === 0
-            : cmd !== cmds['space']
-        ) {
-          event.preventDefault();
-        }
-        cmd.getCmds(sel, editorCtrl.current.makeId).forEach((command) => {
-          queueCommand(command);
-        });
-        break;
+      if (!isCollapsed(curSelection)) {
+        copySelection(editorCtrl.current.value, curSelection);
       }
-    }
-  };
+      event.preventDefault();
+    },
+    [copySelection],
+  );
+
+  const onKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      const curSelection = window.getSelection();
+      if (!curSelection || !isFocused()) {
+        return;
+      }
+      const sel = findSelection(
+        editorCtrl.current.value,
+        curSelection.getRangeAt(0),
+        isSelectionBackwards(curSelection),
+      );
+      const cmdKV = Object.entries(cmds);
+      for (let i = 0; i < cmdKV.length; i++) {
+        const [_name, cmd] = cmdKV[i];
+        if (cmd.isKey(event)) {
+          if (
+            cmd === cmds['delete backward']
+              ? sel.editorId === editorCtrl.current.value.id &&
+                isCollapsed(sel) &&
+                (sel as BlockSelection).start.type ===
+                  BlockSelectionPointType.Paragraph &&
+                (sel as BlockSelection).start.blockId ===
+                  editorCtrl.current.value.blocks[0].id &&
+                ((sel as BlockSelection).start as ParagraphPoint).offset === 0
+              : cmd !== cmds['space']
+          ) {
+            event.preventDefault();
+          }
+          cmd.getCmds(sel, editorCtrl.current.makeId).forEach((command) => {
+            queueCommand(command);
+          });
+          break;
+        }
+      }
+    },
+    [queueCommand],
+  );
 
   useEffect(() => {
     const editorElement = editorRef.current!;
@@ -7100,13 +7152,71 @@ function ReactEditor({
       editorElement.removeEventListener('copy', onCopy);
       editorElement.removeEventListener('keydown', onKeyDown);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onHTMLSelectionChange, onBeforeInput, onCopy, onKeyDown]);
+
+  function getListBlockIdToIdx(value: EditorValue): Record<string, number> {
+    let listIdToCount: Record<string, number> = {};
+    let listBlockIdToIdx: Record<string, number> = {};
+    function range(start: number, endInclusive: number): number[] {
+      let nums: number[] = [];
+      for (let i = start; i <= endInclusive; i++) {
+        nums.push(i);
+      }
+      return nums;
+    }
+    walkEditorValues(
+      value,
+      (_subValue, _data, _ids) => {
+        return {
+          stop: false,
+          data: undefined,
+        };
+      },
+      undefined,
+      false,
+      (block) => {
+        if (
+          block.type === BlockNodeType.Paragraph &&
+          block.style.type === ParagraphStyleType.NumberedList
+        ) {
+          const { indentLevel = 0, listId } = block.style;
+          const blockId = block.id;
+          const key = JSON.stringify({ indentLevel, listId });
+          const hasHigherIndent = range(indentLevel + 1, MAX_INDENT).some(
+            (iL) =>
+              JSON.stringify({ indentLevel: iL, listId }) in listIdToCount,
+          );
+          if (hasHigherIndent) {
+            range(indentLevel + 1, MAX_INDENT).forEach((iL) => {
+              delete listIdToCount[JSON.stringify({ indentLevel: iL, listId })];
+            });
+          }
+          let listIdx: number;
+          if (key in listIdToCount) {
+            listIdx = listIdToCount[key]++;
+          } else {
+            listIdx = 0;
+            listIdToCount[key] = 1;
+          }
+          listBlockIdToIdx[blockId] = listIdx;
+        }
+      },
+    );
+    return listBlockIdToIdx;
+  }
+
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
   }, []);
 
-  function getSelected(
-    value: EditorValue,
-    selection: Selection | null,
-  ): { editors: string[]; blocks: string[] } {
+  const onEditorToolbarMouseDown = (e: React.MouseEvent<HTMLElement>) => {
+    e.preventDefault();
+  };
+
+  const selected = useMemo(() => {
+    let value = editorCtrl.current.value;
+    const selection = editorCtrl.current.selection;
     if (!selection || isCollapsed(selection)) {
       return { editors: [], blocks: [] };
     }
@@ -7246,73 +7356,8 @@ function ReactEditor({
       },
     );
     return { editors: selectedEditors, blocks: selectedBlocks };
-  }
-
-  function getListBlockIdToIdx(value: EditorValue): Record<string, number> {
-    let listIdToCount: Record<string, number> = {};
-    let listBlockIdToIdx: Record<string, number> = {};
-    function range(start: number, endInclusive: number): number[] {
-      let nums: number[] = [];
-      for (let i = start; i <= endInclusive; i++) {
-        nums.push(i);
-      }
-      return nums;
-    }
-    walkEditorValues(
-      value,
-      (_subValue, _data, _ids) => {
-        return {
-          stop: false,
-          data: undefined,
-        };
-      },
-      undefined,
-      false,
-      (block) => {
-        if (
-          block.type === BlockNodeType.Paragraph &&
-          block.style.type === ParagraphStyleType.NumberedList
-        ) {
-          const { indentLevel = 0, listId } = block.style;
-          const blockId = block.id;
-          const key = JSON.stringify({ indentLevel, listId });
-          const hasHigherIndent = range(indentLevel + 1, MAX_INDENT).some(
-            (iL) =>
-              JSON.stringify({ indentLevel: iL, listId }) in listIdToCount,
-          );
-          if (hasHigherIndent) {
-            range(indentLevel + 1, MAX_INDENT).forEach((iL) => {
-              delete listIdToCount[JSON.stringify({ indentLevel: iL, listId })];
-            });
-          }
-          let listIdx: number;
-          if (key in listIdToCount) {
-            listIdx = listIdToCount[key]++;
-          } else {
-            listIdx = 0;
-            listIdToCount[key] = 1;
-          }
-          listBlockIdToIdx[blockId] = listIdx;
-        }
-      },
-    );
-    return listBlockIdToIdx;
-  }
-
-  const [isClient, setIsClient] = useState(false);
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  const onEditorToolbarMouseDown = (e: React.MouseEvent<HTMLElement>) => {
-    e.preventDefault();
-  };
-
-  const selected = useMemo(
-    () => getSelected(editorCtrl.current.value, editorCtrl.current.selection),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [editorCtrl.current.value, editorCtrl.current.selection],
-  );
+  }, [editorCtrl.current.value, editorCtrl.current.selection]);
   const selectedBlocks = useCustomCompareMemo(
     () => selected.blocks,
     [selected.blocks],
@@ -7344,19 +7389,6 @@ function ReactEditor({
       );
     },
   );
-  const hasPlaceholder =
-    editorCtrl.current.value.blocks.length === 1 &&
-    editorCtrl.current.value.blocks[0].type === BlockNodeType.Paragraph &&
-    getParagraphLength(editorCtrl.current.value.blocks[0]) === 0 &&
-    Object.keys(editorCtrl.current.textStyle).every(
-      (k) => editorCtrl.current.textStyle === undefined,
-    ) &&
-    Object.keys(editorCtrl.current.value.blocks[0].style).every(
-      (k) =>
-        (editorCtrl.current.value.blocks[0] as ParagraphNode).style[
-          k as keyof ParagraphStyle
-        ] === (k === 'type' ? ParagraphStyleType.Default : undefined),
-    );
   const placeholderRef = useRef<HTMLDivElement | null>(null);
   return (
     <>
@@ -7421,10 +7453,7 @@ function ReactEditor({
             <SelectedEditorsContext.Provider value={selectedEditors}>
               <SelectedBlocksContext.Provider value={selectedBlocks}>
                 <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
-                  <QueueCommandContext.Provider
-                    // eslint-disable-next-line react-hooks/exhaustive-deps
-                    value={useCallback(queueCommand, [])}
-                  >
+                  <QueueCommandContext.Provider value={queueCommand}>
                     <ReactEditorValue value={editorCtrl.current.value} />
                   </QueueCommandContext.Provider>
                 </NumberedListIndicesContext.Provider>
@@ -7741,9 +7770,7 @@ function RedoIcon(props: ToolbarIconProps): JSX.Element {
 }
 
 export default function Home() {
-  function id(): string {
-    return uuidv4();
-  }
+  const makeId = useCallback(() => uuidv4(), []);
 
   return (
     <div
@@ -7762,7 +7789,7 @@ export default function Home() {
         <ReactEditor
           placeholder="Type here..."
           initialValue={require('./initialState.json')}
-          makeId={id}
+          makeId={makeId}
         />
       </main>
     </div>
