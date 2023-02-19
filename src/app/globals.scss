@@ -329,7 +329,9 @@ i {
 }
 
 .editor .block-placeholder-br {
-  @include hidden;
+  display: block;
+  transform: scale(0.01);
+  clip-path: circle(0);
 }
 
 @mixin block-outline($x: 0.35em) {
@@ -472,7 +474,7 @@ i {
     position: relative;
     border-radius: 10px;
     padding: $spacing * 1.2 $spacing * 1.5;
-    padding-top: $spacing * 3;
+    padding-top: $spacing * 1.25;
   }
 
   @media screen and (max-width: 1000px) {
@@ -600,6 +602,12 @@ i {
 
 .editor .code-block-container,
 .editor .img-container {
+  cursor: pointer;
+}
+
+.editor .code-block-container,
+.editor .img-container,
+.editor .table-container {
   margin-top: 2em;
   margin-bottom: 2em;
 }
@@ -641,6 +649,24 @@ i {
       padding-left: #{($i + 1) * 2}em;
     }
   }
+  &[data-indent='1'] {
+    list-style: lower-roman;
+  }
+  &[data-indent='2'] {
+    list-style: lower-alpha;
+  }
+  &[data-indent='4'] {
+    list-style: lower-roman;
+  }
+  &[data-indent='5'] {
+    list-style: lower-alpha;
+  }
+  &[data-indent='7'] {
+    list-style: lower-roman;
+  }
+  &[data-indent='8'] {
+    list-style: lower-alpha;
+  }
 }
 
 .editor li:not(.first-last-item) {
@@ -673,10 +699,6 @@ i {
 .editor h6 code {
   font-size: inherit;
 }
-
-// .editor li + li {
-//   margin-top: 0.5em;
-// }
 
 .editor .block-table .block-table__th {
   font-weight: var(--bold-fw);

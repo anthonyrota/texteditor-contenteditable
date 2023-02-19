@@ -2,21 +2,2855 @@
   "blocks": [
     {
       "type": "Block/Paragraph",
-      "isBlock": false,
       "children": [
         {
           "type": "Inline/Text",
-          "isBlock": false,
-          "text": "",
+          "text": "Getting started with Vue",
+          "style": {
+            "bold": true
+          },
+          "id": "66e07d3a-8e2f-405e-ba1b-02184a1317cd"
+        }
+      ],
+      "style": {
+        "type": "Heading 1"
+      },
+      "id": "4e078ddd-61cb-44e2-a4da-7ae87196f65b"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Previous",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Client-side_JavaScript_frameworks/Ember_resources"
+            }
+          },
+          "id": "64455cc5-9c8f-4cd0-9db2-a9ceb78fb414"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "8b69f569-7d4f-4485-b8e0-c74bab114366"
+      },
+      "id": "35e7aa78-932c-479d-8f79-fdc8314bef3a"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Overview: Client-side JavaScript frameworks",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Client-side_JavaScript_frameworks"
+            }
+          },
+          "id": "ffc0e190-01df-4432-a449-6238f944ced3"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "8b69f569-7d4f-4485-b8e0-c74bab114366"
+      },
+      "id": "8c41f815-55fa-442e-bf3d-eaff6264e722"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Next",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Client-side_JavaScript_frameworks/Vue_first_component"
+            }
+          },
+          "id": "4e34c433-1f49-42ca-a932-f3ffeabb0133"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "8b69f569-7d4f-4485-b8e0-c74bab114366"
+      },
+      "id": "b534c372-fb3f-413b-b0e1-afd7369314cf"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Now let's introduce Vue, the third of our frameworks. In this article we'll look at a little bit of Vue background, learn how to install it and create a new project, study the high-level structure of the whole project and an individual component, see how to run the project locally, and get it prepared to start building our example.",
           "style": {},
-          "id": "4fe16966-235d-462a-ac1c-939b7576bdbb"
+          "id": "9a154832-be81-4aca-baba-5541ba0d8835"
         }
       ],
       "style": {
         "type": "Default"
       },
-      "id": "16eb0a51-1d80-4641-9d22-cf6a73035be6"
+      "id": "e3b14819-71ce-42a7-b173-95ec21e1d7b8"
+    },
+    {
+      "type": "Block/Table",
+      "rows": [
+        {
+          "cells": [
+            {
+              "value": {
+                "blocks": [
+                  {
+                    "type": "Block/Paragraph",
+                    "children": [
+                      {
+                        "type": "Inline/Text",
+                        "text": "Prerequisites:",
+                        "style": {},
+                        "id": "6baeb241-3e57-488d-8946-b3ad1b0a0b09"
+                      }
+                    ],
+                    "style": {
+                      "type": "Default",
+                      "align": "Left"
+                    },
+                    "id": "d17ae944-5811-427a-8eb2-110728cecf27"
+                  }
+                ],
+                "id": "8383b26f-fad3-4b39-a660-77bdbbbcb9ee"
+              },
+              "id": "18feb497-5333-4552-ac81-25a92fdf26e6"
+            },
+            {
+              "value": {
+                "blocks": [
+                  {
+                    "type": "Block/Paragraph",
+                    "children": [
+                      {
+                        "type": "Inline/Text",
+                        "text": "Familiarity with the core ",
+                        "style": {},
+                        "id": "761f21ba-1e8c-4c9c-b933-42f4b78c5219"
+                      },
+                      {
+                        "type": "Inline/Text",
+                        "text": "HTML",
+                        "style": {
+                          "underline": true,
+                          "link": {
+                            "href": "https://developer.mozilla.org/en-US/docs/Learn/HTML"
+                          }
+                        },
+                        "id": "357dcb34-6fa3-4dbc-b503-82918f5a6c1a"
+                      },
+                      {
+                        "type": "Inline/Text",
+                        "text": ", ",
+                        "style": {},
+                        "id": "78369d49-04b1-44b2-a8d7-670cbcfe5dd0"
+                      },
+                      {
+                        "type": "Inline/Text",
+                        "text": "CSS",
+                        "style": {
+                          "underline": true,
+                          "link": {
+                            "href": "https://developer.mozilla.org/en-US/docs/Learn/CSS"
+                          }
+                        },
+                        "id": "ebe7fe5f-b0df-456a-98ce-120fc0549453"
+                      },
+                      {
+                        "type": "Inline/Text",
+                        "text": ", and ",
+                        "style": {},
+                        "id": "c9f43822-3da1-4126-8044-293fcd1704c7"
+                      },
+                      {
+                        "type": "Inline/Text",
+                        "text": "JavaScript",
+                        "style": {
+                          "underline": true,
+                          "link": {
+                            "href": "https://developer.mozilla.org/en-US/docs/Learn/JavaScript"
+                          }
+                        },
+                        "id": "1cc22e7b-ac31-4e18-9051-9817e44098c8"
+                      },
+                      {
+                        "type": "Inline/Text",
+                        "text": " languages, knowledge of the ",
+                        "style": {},
+                        "id": "a1a23e81-e44a-4300-b62d-a94f79abfe1c"
+                      },
+                      {
+                        "type": "Inline/Text",
+                        "text": "terminal/command line",
+                        "style": {
+                          "underline": true,
+                          "link": {
+                            "href": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line"
+                          }
+                        },
+                        "id": "42d4366d-58fd-4109-be33-ad243506b51f"
+                      },
+                      {
+                        "type": "Inline/Text",
+                        "text": ".",
+                        "style": {},
+                        "id": "0b533a4b-3960-453d-9b4e-3544b6274d5b"
+                      }
+                    ],
+                    "style": {
+                      "type": "Default"
+                    },
+                    "id": "8e66f543-d617-428d-ba5d-53902f75c7d0"
+                  },
+                  {
+                    "type": "Block/Paragraph",
+                    "children": [
+                      {
+                        "type": "Inline/Text",
+                        "text": "Vue components are written as a combination of JavaScript objects that manage the app's data and an HTML-based template syntax that maps to the underlying DOM structure. For installation, and to use some of the more advanced features of Vue (like Single File Components or render functions), you'll need a terminal with node + npm installed.",
+                        "style": {},
+                        "id": "f601d8fc-5f43-4889-891b-35ebd94f4ad4"
+                      }
+                    ],
+                    "style": {
+                      "type": "Default"
+                    },
+                    "id": "ff7acee2-83ef-43fb-9dd4-8658aaf40bba"
+                  }
+                ],
+                "id": "ca44da75-7cda-4aa4-b32b-71c1014a53b2"
+              },
+              "id": "94a11a62-e184-4f8c-89f5-a72e0a5e2617"
+            }
+          ],
+          "id": "4951e0ab-9db4-4916-bfac-87332617aa52"
+        },
+        {
+          "cells": [
+            {
+              "value": {
+                "blocks": [
+                  {
+                    "type": "Block/Paragraph",
+                    "children": [
+                      {
+                        "type": "Inline/Text",
+                        "text": "Objective:",
+                        "style": {},
+                        "id": "89367992-628a-4df8-a3de-920e94cdf42b"
+                      }
+                    ],
+                    "style": {
+                      "type": "Default",
+                      "align": "Left"
+                    },
+                    "id": "c52de310-463e-45e6-b9ed-4affe250434d"
+                  }
+                ],
+                "id": "e078eb97-5650-43bb-a646-a015dea89466"
+              },
+              "id": "eaa9766f-ba60-4490-b908-649aabad72bc"
+            },
+            {
+              "value": {
+                "blocks": [
+                  {
+                    "type": "Block/Paragraph",
+                    "children": [
+                      {
+                        "type": "Inline/Text",
+                        "text": "To setup a local Vue development environment, create a starter app, and understand the basics of how it works.",
+                        "style": {},
+                        "id": "6c66b869-cd9d-44da-ba97-f36b79e87991"
+                      }
+                    ],
+                    "style": {
+                      "type": "Default"
+                    },
+                    "id": "aa104329-6b62-4199-982c-d2e147f56f4b"
+                  }
+                ],
+                "id": "dfaf2fc2-bf1c-48cb-beb8-ecf2737d7d0f"
+              },
+              "id": "df22f195-edcf-46f7-8fa5-d6a5d42df9f8"
+            }
+          ],
+          "id": "fc4a1e05-89b2-4b65-8050-956469353fa5"
+        }
+      ],
+      "numColumns": 2,
+      "id": "682c1517-dc73-4e2b-8311-2cfac26d60f9"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "A clearer Vue",
+          "style": {
+            "bold": true
+          },
+          "id": "51578ade-075c-4b35-b19c-f905498e0cbd"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "2c46dc9c-bc79-4574-8bdb-6b80c817516a"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Vue is a modern JavaScript framework that provides useful facilities for progressive enhancement — unlike many other frameworks, you can use Vue to enhance existing HTML. This lets you use Vue as a drop-in replacement for a library like ",
+          "style": {},
+          "id": "51399aac-1234-4802-9028-b86854cd4d7f"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "jQuery",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://jquery.com/"
+            }
+          },
+          "id": "c0d71ca8-f56a-44f6-a3d6-ce60d0daf5e6"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "3dcd603a-ec7b-4a49-91e9-ac4f500f5c85"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "f5216334-82ce-4891-8dc1-86ffc4e046c9"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "That being said, you can also use Vue to write entire Single Page Applications (SPAs). This allows you to create markup managed entirely by Vue, which can improve developer experience and performance when dealing with complex applications. It also allows you to take advantage of libraries for client-side routing and state management when you need to. Additionally, Vue takes a \"middle ground\" approach to tooling like client-side routing and state management. While the Vue core team maintains suggested libraries for these functions, they are not directly bundled into Vue. This allows you to select a different routing/state management library if they better fit your application.",
+          "style": {},
+          "id": "3ac6a286-8b4a-4df5-b152-a6a25b947d8d"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "7e7ac8bc-88bf-4b56-861d-c08716636d25"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "In addition to allowing you to progressively integrate Vue into your applications, Vue also provides a progressive approach to writing markup. Like most frameworks, Vue lets you create reusable blocks of markup via components. Most of the time, Vue components are written using a special HTML template syntax. When you need more control than the HTML syntax allows, you can write JSX or plain JavaScript functions to define your components.",
+          "style": {},
+          "id": "dbe5e12e-c602-485f-b39e-68980a520bd6"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "e070e007-22ba-444b-9b08-d3cc9529a707"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "As you work through this tutorial, you might want to keep the ",
+          "style": {},
+          "id": "d67126ea-a749-49ca-8f86-84a34c93d420"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Vue guide",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://vuejs.org/guide/introduction.html"
+            }
+          },
+          "id": "21b38a94-c2c4-43e4-b027-08f20eb6db06"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " and ",
+          "style": {},
+          "id": "78fc4437-049c-4230-897c-25f201629f86"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "API documentation",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://vuejs.org/api/"
+            }
+          },
+          "id": "ba731f47-e380-49dd-802c-65f32db1fd25"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " open in other tabs, so you can refer to them if you want more information on any sub topic. For a good (but potentially biased) comparison between Vue and many of the other frameworks, see ",
+          "style": {},
+          "id": "7273e524-4bbc-48f1-8fb9-c0a9ebdbe984"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Vue Docs: Comparison with Other Frameworks",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://v2.vuejs.org/v2/guide/comparison.html"
+            }
+          },
+          "id": "d974c7e6-c97f-4735-a6b3-4666bc83a7a5"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "ecda281a-ad73-489c-8dca-0e48bde426da"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "c61d1f37-293b-44a1-8311-d2d50dd659fd"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Installation",
+          "style": {
+            "bold": true
+          },
+          "id": "398ecc47-e34c-4963-a29d-64489cec6707"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "70c669b6-ab4f-4c75-95a3-671c4e6d8ce8"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "To use Vue in an existing site, you can drop one of the following ",
+          "style": {},
+          "id": "38cb3df7-3f7d-4844-9ec3-31c561990480"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<script>",
+          "style": {
+            "underline": true,
+            "code": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/script"
+            }
+          },
+          "id": "524f7a5d-8992-46e0-b899-d2f4912af07d"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " elements onto a page. This allows you to start using Vue on existing sites, which is why Vue prides itself on being a progressive framework. This is a great option when migrating an existing project using a library like jQuery to Vue. With this method, you can use a lot of the core features of Vue, such as the attributes, custom components, and data-management.",
+          "style": {},
+          "id": "cc279d07-ebc6-4fe7-a24d-8d8791e44893"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "8985dbc1-28b4-4b38-b9d8-4fcf3176aeac"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Development Script (not optimized, but includes console warnings which is great for development.)",
+          "style": {},
+          "id": "24bf6afc-e8e9-4545-ac2b-e6e7d58172da"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "fc284c63-5a94-4dd9-96ed-5087a0ef9631"
+      },
+      "id": "cab5bb88-982e-46c4-896f-2b1a2fd27435"
+    },
+    {
+      "type": "Block/Code",
+      "code": "<script src=\"https://cdn.jsdelivr.net/npm/vue@3.2.45/index.js\"></script>",
+      "language": "html",
+      "id": "ade9241e-d69a-4564-bb44-f0e2c979263b"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Production Script (Optimized version, minimal console warnings. It is recommended that you specify a version number when including Vue on your site so that any framework updates do not break your live site without you knowing.)",
+          "style": {},
+          "id": "9f81ca22-c038-48d2-b76b-064476cb3f92"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "fc284c63-5a94-4dd9-96ed-5087a0ef9631"
+      },
+      "id": "8abed2e2-8623-4e7d-b7ac-1ffdc07f48de"
+    },
+    {
+      "type": "Block/Code",
+      "code": "<script src=\"https://cdn.jsdelivr.net/npm/vue@3\"></script>",
+      "language": "html",
+      "id": "69b5d426-8e47-4cf2-a5b3-34482eb5a4d2"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "However, this approach has some limitations. To build more complex apps, you'll want to use the ",
+          "style": {},
+          "id": "708a8e90-f628-450d-9ef6-8dfc5dd82b1b"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Vue npm package",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://www.npmjs.com/package/vue"
+            }
+          },
+          "id": "e812b610-c878-4a61-b1d9-0f36b5c7b359"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ". This will let you use advanced features of Vue and take advantage of bundlers like WebPack. To make building apps with Vue easier, there is a CLI to streamline the development process. To use the npm package & the CLI you will need:",
+          "style": {},
+          "id": "ad9ea400-3197-4cfe-9dcf-88692a80f81c"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "a32f5272-398d-46c2-a77f-a2c5286f1847"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Node.js 8.11+ installed.",
+          "style": {},
+          "id": "b8c57290-b0b6-4d4a-a977-f2b53e36bb92"
+        }
+      ],
+      "style": {
+        "type": "Numbered List",
+        "listId": "e66881c3-e772-4786-968f-f01c68c5a3c7"
+      },
+      "id": "0c8ca84f-2207-4ac1-8357-45cfdbf8c214"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "npm",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm"
+            }
+          },
+          "id": "b64a6c9b-f7ca-4030-a29b-4d76f62dd833"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " or ",
+          "style": {},
+          "id": "d4d8f155-4a5b-483f-93be-31322e4fd376"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "yarn",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://yarnpkg.com/"
+            }
+          },
+          "id": "5fed26b4-4060-4085-aa09-03c096901351"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "7dc0812c-9611-4c22-9925-8dd8207e8a9f"
+        }
+      ],
+      "style": {
+        "type": "Numbered List",
+        "listId": "e66881c3-e772-4786-968f-f01c68c5a3c7"
+      },
+      "id": "01f62978-7c8a-4cee-915f-850442ca8b0f"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Note: If you don't have the above installed, find out ",
+          "style": {},
+          "id": "af2ac340-8dae-4798-a976-882ac52a33d1"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "more about installing npm and Node.js",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Understanding_client-side_tools/Command_line#adding_powerups"
+            }
+          },
+          "id": "b9376022-9c0d-4a42-8484-402459ab8fb2"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " here.",
+          "style": {},
+          "id": "693f296b-e513-4644-8c81-fd18b8693f87"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "6d22241d-efeb-46f0-b2a7-2a97bbd8e5f6"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "To install the CLI, run the following command in your terminal:",
+          "style": {},
+          "id": "1ebc5687-986b-4215-b331-b61a7bf6c42d"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "1db3f6db-ff94-492e-b427-cdd0edf1d6db"
+    },
+    {
+      "type": "Block/Code",
+      "code": "npm install --global @vue/cli",
+      "language": "plaintext",
+      "id": "a60ced81-0632-4991-ab69-a087c77f38dd"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Or if you'd prefer to use yarn:",
+          "style": {},
+          "id": "30926eae-77ec-4323-908f-4fa5808e1f9b"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "916e9787-17ed-4cde-b10c-4a2775aa3d32"
+    },
+    {
+      "type": "Block/Code",
+      "code": "yarn global add @vue/cli",
+      "language": "plaintext",
+      "id": "0610aa51-0e32-4bd4-a627-00dfcfe38305"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Once installed, to initialize a new project you can then open a terminal in the directory you want to create the project in, and run ",
+          "style": {},
+          "id": "39043ad8-9d94-448a-878d-18f0040dcd53"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "vue create <project-name>",
+          "style": {
+            "code": true
+          },
+          "id": "d15c1a33-6e8c-4475-8913-dd684c5f3fa2"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ". The CLI will then give you a list of project configurations you can use. There are a few preset ones, and you can make your own. These options let you configure things like TypeScript, linting, vue-router, testing, and more.",
+          "style": {},
+          "id": "3fea4c61-0a3f-4b4a-ad60-958414938e1d"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "7c76be22-1ffe-4b6d-96ce-bc466fb66357"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "We'll look at using this below.",
+          "style": {},
+          "id": "f0b1d4c9-eede-4bb5-a228-de65b96d807a"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "ff3bb92c-faf9-466c-9787-4321d95db745"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Initializing a new project",
+          "style": {
+            "bold": true
+          },
+          "id": "3e815950-36d1-4048-8c13-01d3f6d808c1"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "188e9b9c-2f64-4c04-8f80-bf2dd85a756f"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "To explore various features of Vue, we will be building up a sample todo list app. We'll begin by using the Vue CLI to create a new app framework to build our app into.",
+          "style": {},
+          "id": "e7735163-ebe8-41a5-bdca-aa57649a0eaf"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "cf85fee4-6381-45b6-b716-39825f17c823"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "In terminal, ",
+          "style": {},
+          "id": "70abe295-55e4-46ba-94a8-3c96e6f20849"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "cd",
+          "style": {
+            "code": true
+          },
+          "id": "e9e0a547-cff7-4f52-b90a-73a4eb312c9a"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " to where you'd like to create your sample app, then run ",
+          "style": {},
+          "id": "dd7bc92a-bc7d-4105-b604-cc13dbf2f847"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "vue create moz-todo-vue",
+          "style": {
+            "code": true
+          },
+          "id": "4479cde0-c2bc-4d04-91bb-fa37ff2abb58"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ". You can choose the default option ",
+          "style": {},
+          "id": "07c027ad-e158-4ff3-9be9-a0270acd7d76"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Default ([Vue 3] babel, eslint)",
+          "style": {
+            "code": true
+          },
+          "id": "a4fcfcbe-c530-40df-a1f3-a6233e905704"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " by pressing Enter to proceed. The CLI will now begin scaffolding out your project, and installing all of your dependencies.",
+          "style": {},
+          "id": "08752298-76aa-405f-a9c0-9acb919e39a4"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "b8527616-9c6a-4f88-bc0c-309dc746b1da"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "If you've never run the Vue CLI before, you'll get one more question — you'll be asked to choose a package manager which defaults to ",
+          "style": {},
+          "id": "579b447d-ceaa-435e-b835-aad7e66ca5d1"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "yarn",
+          "style": {
+            "code": true
+          },
+          "id": "d02d38f5-041c-4670-b2d7-653b274e5d66"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ". The Vue CLI will default to this package manager from now on. If you need to use a different package manager after this, you can pass in a flag ",
+          "style": {},
+          "id": "2c980cd0-d243-4835-9375-7941c5bdc8b7"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "--packageManager=<package-manager>",
+          "style": {
+            "code": true
+          },
+          "id": "32c30fe7-ea43-4bd5-9c52-1d9c7ac0e660"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ", when you run ",
+          "style": {},
+          "id": "2eabff19-7d8f-4165-89c9-c01cd73c6955"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "vue create",
+          "style": {
+            "code": true
+          },
+          "id": "8a511304-63f4-4d40-bc0c-6a3ca91aac40"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ". So if you wanted to create the ",
+          "style": {},
+          "id": "6daa42f9-3527-45a7-96dc-5852cbce67fa"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "moz-todo-vue",
+          "style": {
+            "code": true
+          },
+          "id": "d60cc620-4d0b-4aef-822e-83cc38bd71fb"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " project with npm and you'd previously chosen yarn, you'd run ",
+          "style": {},
+          "id": "c4a2c70e-46ea-4202-b078-853b418b3286"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "vue create moz-todo-vue --packageManager=npm",
+          "style": {
+            "code": true
+          },
+          "id": "6134a44c-5ceb-4ec2-aba8-50088ccb7167"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "0f5da751-4c35-4ec6-a626-d93e325b9747"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "a23df33a-0e1b-4bba-bf54-438eb0df9c41"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Note: We've not gone over all of the options here, but you can ",
+          "style": {},
+          "id": "ef2ad10f-8fc8-484a-9413-b580ea56a10f"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "find more information on the CLI",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://cli.vuejs.org/"
+            }
+          },
+          "id": "755742c6-ce90-4d5e-bcc9-4705576c6215"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " in the Vue docs.",
+          "style": {},
+          "id": "883f9f44-cfa3-49d3-9278-5c40e5f13f30"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "f29b089e-80bf-49e5-95d1-ad24d5c7b287"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Project structure",
+          "style": {
+            "bold": true
+          },
+          "id": "3e129eac-b4b7-4b56-a398-1c010c6f7cdd"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "c6b51bd2-f3c3-48ed-bed5-0f699bba66cb"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "If everything went successfully, the CLI should have created a series of files and directories for your project. The most significant ones are as follows:",
+          "style": {},
+          "id": "74001dd7-60de-4b67-b213-4ef5bee8aab2"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "23f006ba-632d-480c-8abb-532aee2ac9a5"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "package.json",
+          "style": {
+            "code": true
+          },
+          "id": "225d2d18-ad47-4dae-8b00-729d22a29923"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": This file contains the list of dependencies for your project, as well as some metadata and ",
+          "style": {},
+          "id": "0998e471-b952-4cc7-a0f1-c29ee6e5a236"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "eslint",
+          "style": {
+            "code": true
+          },
+          "id": "9bb8878d-133f-4b4b-be31-25e933898885"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " configuration.",
+          "style": {},
+          "id": "0f803d09-ed0a-4f70-bd0c-9da731fb0dcb"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383"
+      },
+      "id": "2618d4fb-23c8-4441-9510-d431af1c2527"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "yarn.lock",
+          "style": {
+            "code": true
+          },
+          "id": "b05b0566-f24c-45a6-a1ed-d5fadba763c9"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": If you chose ",
+          "style": {},
+          "id": "7eddfd39-91df-4390-ba9c-6ca0530bc4e5"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "yarn",
+          "style": {
+            "code": true
+          },
+          "id": "57e4c26c-1e3f-4eaa-93d6-ec1a892f1309"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " as your package manager, this file will be generated with a list of all the dependencies and sub-dependencies that your project needs.",
+          "style": {},
+          "id": "76c3f7e2-1be7-4277-a30e-67ec9aa6ae0c"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383"
+      },
+      "id": "ed4a94f2-ed5d-4ce6-8d9d-7cdaeb86b5cb"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "babel.config.js",
+          "style": {
+            "code": true
+          },
+          "id": "5686fb93-0494-4e9e-8bce-9d3f65a307a2"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": This is the config file for ",
+          "style": {},
+          "id": "1c0784f4-29e8-453d-a834-fb688eff34b1"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Babel",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://babeljs.io/"
+            }
+          },
+          "id": "1b8c4f56-f403-4eba-9536-84a05fb9b1b6"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ", which transforms modern JavaScript features being used in development code into older syntax that is more cross-browser compatible in production code. You can register additional babel plugins in this file.",
+          "style": {},
+          "id": "7040cf00-f57a-49c6-a3da-b0e599a7a163"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383"
+      },
+      "id": "831ef015-698f-409b-8ef0-fd8874214702"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "jsconfig.json",
+          "style": {
+            "code": true
+          },
+          "id": "1737aa48-7d3e-47cc-b465-d5dc6f32af37"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": This is a config file for ",
+          "style": {},
+          "id": "6cec0944-a178-422c-bc07-709b053d30b8"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Visual Studio Code",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://code.visualstudio.com/docs/languages/jsconfig"
+            }
+          },
+          "id": "77bd840c-7a33-4cad-b146-b8a165d70fe1"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " and gives context for VS Code on your project structure and assists auto-completion.",
+          "style": {},
+          "id": "fcab41c7-09b0-4baa-b0dd-dab09b8fd03b"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383"
+      },
+      "id": "35c46a2a-a4d6-4955-a514-6bf492a98dcd"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "public",
+          "style": {
+            "code": true
+          },
+          "id": "24137e7d-3c6e-402b-950e-04e4f454165a"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": This directory contains static assets that are published, but not processed by ",
+          "style": {},
+          "id": "7dbb3910-3233-454f-8e4f-244e46e100b5"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Webpack",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://webpack.js.org/"
+            }
+          },
+          "id": "a79fdb31-e059-445e-a05e-ebe0ee2b5813"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " during build (with one exception; ",
+          "style": {},
+          "id": "63d03a52-9261-4af0-9d35-326ab2e84b6e"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "index.html",
+          "style": {
+            "code": true
+          },
+          "id": "656442d8-d055-44c2-8769-a15b97655c08"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " gets some processing).",
+          "style": {},
+          "id": "7fd58a05-682c-45aa-80dc-5b44aaaf0f5c"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383"
+      },
+      "id": "aa7c15fb-26f7-46f8-8cd2-2c98c5bb57d2"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "favicon.ico",
+          "style": {
+            "code": true
+          },
+          "id": "f51a5f3d-dfff-481e-81c1-0e0815be0da0"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": This is the favicon for your app. Currently, it's the Vue logo.",
+          "style": {},
+          "id": "b0dde59e-c712-463d-a674-ad24eb32b5e3"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383",
+        "indentLevel": 1
+      },
+      "id": "56f71196-1bce-414f-a1bf-4d7d52821a3b"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "index.html",
+          "style": {
+            "code": true
+          },
+          "id": "b74ac4f1-4f6c-4832-9b0d-0e2d37ce2add"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": This is the template for your app. Your Vue app is run from this HTML page, and you can use lodash template syntax to interpolate values into it.",
+          "style": {},
+          "id": "a4a68001-fd6c-4f5c-9a5a-bd5efae903fb"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383",
+        "indentLevel": 1
+      },
+      "id": "fa4f9923-b23d-493c-8a72-97a5751aef2f"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Note: this is not the template for managing the layout of your application — this template is for managing static HTML that sits outside of your Vue app. Editing this file typically only occurs in advanced use cases.",
+          "style": {},
+          "id": "962c239e-59e0-4527-b2df-78872df587f6"
+        }
+      ],
+      "style": {
+        "type": "Default",
+        "indentLevel": 2
+      },
+      "id": "7f0257ec-fb80-4513-aed2-67e466d9341e"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "src",
+          "style": {
+            "code": true
+          },
+          "id": "4d7af18a-108d-4e6a-bdbf-bfe6699b2a68"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": This directory contains the core of your Vue app.",
+          "style": {},
+          "id": "e1890953-3e37-4e72-940e-e1fe94a58763"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383"
+      },
+      "id": "677666f1-de49-480d-9e66-5b28c34887a0"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "main.js",
+          "style": {
+            "code": true
+          },
+          "id": "319c3dc4-46eb-4da7-b4cb-2ecee236818f"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": this is the entry point to your application. Currently, this file initializes your Vue application and signifies which HTML element in the ",
+          "style": {},
+          "id": "cf51bbdc-e730-441a-b4b9-24ee59ee1805"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "index.html",
+          "style": {
+            "code": true
+          },
+          "id": "fde53ad8-688a-4659-bf9a-d764c8e4924c"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " file your app should be attached to. This file is often where you register global components or additional Vue libraries.",
+          "style": {},
+          "id": "aeea375b-d11f-4283-a4c2-a3706ef9d6b6"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383",
+        "indentLevel": 1
+      },
+      "id": "f22bd755-7f7f-41a0-96e2-a2031a9d7a8e"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "App.vue",
+          "style": {
+            "code": true
+          },
+          "id": "8228603f-708d-453f-89fd-be1871cc1284"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": this is the top-level component in your Vue app. See below for more explanation of Vue components.",
+          "style": {},
+          "id": "b1f654cf-1029-42df-8818-f51a58ec1222"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383",
+        "indentLevel": 1
+      },
+      "id": "e0211777-dde5-4ea1-b48b-e04a2e786141"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "components",
+          "style": {
+            "code": true
+          },
+          "id": "78bd85fb-3271-4c8c-a6aa-5786b8f11bf5"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": this directory is where you keep your components. Currently, it just has one example component.",
+          "style": {},
+          "id": "09fb613c-feb7-4a67-9ade-82abefcf0b4b"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383",
+        "indentLevel": 1
+      },
+      "id": "3da5f77c-ab86-49ab-9daa-bd4b18d24dd3"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "assets",
+          "style": {
+            "code": true
+          },
+          "id": "597b886f-6f68-47b1-8a8d-7f842b883218"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ": this directory is for storing static assets like CSS and images. Because these files are in the source directory, they can be processed by Webpack. This means you can use pre-processors like ",
+          "style": {},
+          "id": "ff8011f3-545a-4c45-9b97-8934acc9c465"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Sass/SCSS",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://sass-lang.com/"
+            }
+          },
+          "id": "546f2ec5-a19e-4630-9bbc-686d8698f5a7"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " or ",
+          "style": {},
+          "id": "65ad59ad-e65a-48cb-937a-3ea28a6b2782"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Stylus",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://stylus-lang.com/"
+            }
+          },
+          "id": "e48fd611-9f35-42fc-8a53-7530d8d5d52e"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "e7354926-4381-4e84-b887-bc9163eb99ba"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "296eee09-518d-4d18-a5d0-c1d99ca27383",
+        "indentLevel": 1
+      },
+      "id": "695c0256-87ab-4ce0-ba30-b2881236473d"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Note: Depending on the options you select when creating a new project, there might be other directories present (for example, if you choose a router, you will also have a ",
+          "style": {},
+          "id": "520a6220-e230-4d07-b3ca-39ede33d827b"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "views",
+          "style": {
+            "code": true
+          },
+          "id": "53c63de8-ad47-477c-b938-6b4fff1faa2a"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " directory).",
+          "style": {},
+          "id": "b702ab39-e86e-4ad4-bd33-fb0ba90a4784"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "7faf1584-cc88-4c60-8594-8d985db9cc6c"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": ".vue files (single file components)",
+          "style": {
+            "bold": true
+          },
+          "id": "627dd675-de36-41e5-874d-67f1219470c7"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "fcd16fbb-e636-4c3b-834d-f35911fb9c9f"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Like in many front-end frameworks, components are a central part of building apps in Vue. These components let you break a large application into discrete building blocks that can be created and managed separately, and transfer data between each other as required. These small blocks can help you reason about and test your code.",
+          "style": {},
+          "id": "a543b902-738f-4ee8-8a58-1947194ed1da"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "212aa33b-ac77-4b40-b092-c626f15e3a84"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "While some frameworks encourage you to separate your template, logic, and styling code into separate files, Vue takes the opposite approach. Using ",
+          "style": {},
+          "id": "428832ab-0f88-4c15-8c05-70a40528567b"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "Single File Components (SFC)",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://vuejs.org/guide/scaling-up/sfc.html"
+            }
+          },
+          "id": "a0b7cd92-a2e2-408e-bba5-dffb68bd54e8"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ", Vue lets you group your templates, corresponding script, and CSS all together in a single file ending in ",
+          "style": {},
+          "id": "6960f4ee-8937-4bad-8d36-e84088581e8b"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".vue",
+          "style": {
+            "code": true
+          },
+          "id": "437a7056-e83c-4f47-8d51-87d72a8cae0d"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ". These files are processed by a JS build tool (such as Webpack), which means you can take advantage of build-time tooling in your project. This allows you to use tools like Babel, TypeScript, SCSS and more to create more sophisticated components.",
+          "style": {},
+          "id": "ce9ad858-78e8-4774-8948-f1075185d24d"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "8eb4d284-5e5d-44dc-960e-4d8d05db41ab"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "As a bonus, projects created with the Vue CLI are configured to use ",
+          "style": {},
+          "id": "369893c1-68f0-435c-8155-c0ed5a6e3280"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".vue",
+          "style": {
+            "code": true
+          },
+          "id": "11f21d91-8cdc-476a-928e-8758d415d521"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " files with Webpack out of the box. In fact, if you look inside the ",
+          "style": {},
+          "id": "f19b6dac-2bd1-4ff1-bfc3-a9fe2fdb8c4e"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "src",
+          "style": {
+            "code": true
+          },
+          "id": "d04c2307-5363-4983-83fb-09fc7c2521a8"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " folder in the project we created with the CLI, you'll see your first ",
+          "style": {},
+          "id": "d95ad055-dbe5-42c5-8abb-7abcf633df6c"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".vue",
+          "style": {
+            "code": true
+          },
+          "id": "508fe416-66df-48a2-9347-ebfb8507b63d"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " file: ",
+          "style": {},
+          "id": "93d90b5c-ccf1-4c26-9fa1-9c107cd5b058"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "App.vue",
+          "style": {
+            "code": true
+          },
+          "id": "afe66a92-bd6b-4e2a-baa3-e201e31835d9"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "03d2979c-b186-4207-ad2b-725518db61d2"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "cb8c5fca-bbd7-4c70-8d39-ea92e1354e39"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Let's explore this now.",
+          "style": {},
+          "id": "c726086c-7660-4f7e-a464-7ad882bf15f6"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "2562d977-bcad-4c51-ae0e-f8d11731158e"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "App.vue",
+          "style": {
+            "bold": true
+          },
+          "id": "8b30b576-ee7f-4c18-b54f-d542863083ea"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "06ae6cdf-46d8-401e-9cf2-06ee21317aed"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Open your ",
+          "style": {},
+          "id": "24414a3d-4d91-4087-81f7-f8c89f7f50bb"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "App.vue",
+          "style": {
+            "code": true
+          },
+          "id": "f7512615-2466-4503-829e-d34b8f533e10"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " file — you'll see that it has three parts: ",
+          "style": {},
+          "id": "477135a6-dee1-43d0-9bd8-7d6e52e9fdb5"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<template>",
+          "style": {
+            "code": true
+          },
+          "id": "50e4ebfb-13ae-490b-8528-a19ef761bcef"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ", ",
+          "style": {},
+          "id": "cf40b9db-2525-4e19-a622-e5fe217b6726"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<script>",
+          "style": {
+            "code": true
+          },
+          "id": "6e14a3fc-3a13-4f73-8d9a-1fb394e1b4e2"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ", and ",
+          "style": {},
+          "id": "735c6e82-35b3-483f-b333-63c08c9585da"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<style>",
+          "style": {
+            "code": true
+          },
+          "id": "e712e31a-6aab-4a6c-ae0c-89b35b381091"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ", which contain the component's template, scripting, and styling information. All Single File Components share this same basic structure.",
+          "style": {},
+          "id": "5ad537bc-b129-4acb-b409-add3111f1120"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "b428f241-b28e-43c5-af80-bb97b28ea645"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "<template>",
+          "style": {
+            "code": true
+          },
+          "id": "65d890a1-2d77-43c2-98a0-bf8a0ad53788"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " contains all the markup structure and display logic of your component. Your template can contain any valid HTML, as well as some Vue-specific syntax that we'll cover later.",
+          "style": {},
+          "id": "97c5d23c-8400-4050-964e-e8a3821241b8"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "03709d88-83a8-4278-a490-5dcde74c187f"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Note: By setting the ",
+          "style": {},
+          "id": "2cf56db6-d288-4752-a28a-6ad863e4279f"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "lang",
+          "style": {
+            "code": true
+          },
+          "id": "4e9e91d1-c30a-49fe-a343-382b639cba9a"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " attribute on the ",
+          "style": {},
+          "id": "83064583-512b-4b84-95a8-a53bfa59d4a5"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<template>",
+          "style": {
+            "code": true
+          },
+          "id": "72015cbb-fc92-44f2-a5d3-99486aabf9ea"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " tag, you can use Pug template syntax instead of standard HTML — ",
+          "style": {},
+          "id": "4f4cc08c-e2a8-4de6-a6ce-79b8316b1346"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<template lang=\"pug\">",
+          "style": {
+            "code": true
+          },
+          "id": "e0072b66-10d6-411a-b7ae-e543a6e2e301"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ". We'll stick to standard HTML through this tutorial, but it is worth knowing that this is possible.",
+          "style": {},
+          "id": "31bfa05f-5d5c-420c-8728-f36dca6f910c"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "29f7526f-57ae-468a-bac5-8b2f368816a3"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "<script>",
+          "style": {
+            "code": true
+          },
+          "id": "3e928e22-70ce-45ef-a97d-03567bfc56a2"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " contains all of the non-display logic of your component. Most importantly, your ",
+          "style": {},
+          "id": "8ccb93f0-7b3d-4a5d-af23-c8416ece0730"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<script>",
+          "style": {
+            "code": true
+          },
+          "id": "eb3ba121-05f5-440a-a032-6770ca52a8d9"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " tag needs to have a default exported JS object. This object is where you locally register components, define component inputs (props), handle local state, define methods, and more. Your build step will process this object and transform it (with your template) into a Vue component with a ",
+          "style": {},
+          "id": "95af1851-f05d-42bf-808c-083723b2a2e5"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "render()",
+          "style": {
+            "code": true
+          },
+          "id": "2cc0ccc5-56d1-4818-9828-1ce2f7c078fd"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " function.",
+          "style": {},
+          "id": "09f35a07-a635-42a8-b478-50b7e3d31ace"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "c9250ebf-f032-4fd4-9376-df13155f440d"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "In the case of ",
+          "style": {},
+          "id": "097b30a8-01e0-4a71-8dd2-6746e938c069"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "App.vue",
+          "style": {
+            "code": true
+          },
+          "id": "34850cc9-589c-4c22-b7d9-62b91cbede79"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ", our default export sets the name of the component to ",
+          "style": {},
+          "id": "edbb1635-ec2a-435a-8d1f-a2d24d2091cc"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "App",
+          "style": {
+            "code": true
+          },
+          "id": "d7afd4c0-2f00-488e-98d5-3e656898468f"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " and registers the ",
+          "style": {},
+          "id": "66db1c87-0dc0-4d98-b69e-e1cfb86b09af"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "HelloWorld",
+          "style": {
+            "code": true
+          },
+          "id": "8ccfcef5-9df3-4106-a06e-dbfec005b1f5"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " component by adding it into the ",
+          "style": {},
+          "id": "4ec103de-ce00-424d-aee8-9bdcd80a3496"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "components",
+          "style": {
+            "code": true
+          },
+          "id": "11d400ad-0a88-4b81-8e3e-2f8676b5d365"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " property. When you register a component in this way, you're registering it locally. Locally registered components can only be used inside the components that register them, so you need to import and register them in every component file that uses them. This can be useful for bundle splitting/tree shaking since not every page in your app necessarily needs every component.",
+          "style": {},
+          "id": "020ba77a-8036-44af-88fb-adc585cce583"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "22cc855e-4bd1-4806-bb75-9ad6a2ef4160"
+    },
+    {
+      "type": "Block/Code",
+      "code": "import HelloWorld from \"./components/HelloWorld.vue\";\n\nexport default {\n  name: \"App\",\n  components: {\n    //You can register components locally here.\n    HelloWorld,\n  },\n};",
+      "language": "javascript",
+      "id": "0adf8f10-a3e8-486e-a075-aa081022df80"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Note: If you want to use ",
+          "style": {},
+          "id": "0dc5c6c2-9ec2-4be0-b70c-038bf7d6ad24"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "TypeScript",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://www.typescriptlang.org/"
+            }
+          },
+          "id": "f31ff2bb-1010-4fe1-83e2-cc96c94fffcc"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " syntax, you need to set the ",
+          "style": {},
+          "id": "2930ca52-a798-47c3-af52-856aba1005d9"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "lang",
+          "style": {
+            "code": true
+          },
+          "id": "c9c91ee3-a5b5-4a32-ad57-13cc68f8603b"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " attribute on the ",
+          "style": {},
+          "id": "af3d1f77-e631-4be7-877f-83abf0c86929"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<script>",
+          "style": {
+            "code": true
+          },
+          "id": "3fc7e2d6-3883-4946-b6ff-586791d070a0"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " tag to signify to the compiler that you're using TypeScript — ",
+          "style": {},
+          "id": "917c14f7-9779-4ebe-944c-fcd6ffd96f57"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<script lang=\"ts\">",
+          "style": {
+            "code": true
+          },
+          "id": "8f52859a-305e-4a33-9b15-029198c3ff7d"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "4060b342-5cae-4756-827d-69ae96ca10d1"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "73a982a3-c437-46c1-b024-d693b6750872"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "<style>",
+          "style": {
+            "code": true
+          },
+          "id": "8ce3bf84-f8d8-4348-96ad-b8f7cde4c67e"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " is where you write your CSS for the component. If you add a ",
+          "style": {},
+          "id": "88d07cc1-ba37-4766-9fa7-437c4cf76661"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "scoped",
+          "style": {
+            "code": true
+          },
+          "id": "719cb6ea-1665-4595-be57-b0a4c8b66bc8"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " attribute — ",
+          "style": {},
+          "id": "88f18953-abe9-41fe-bf8c-b1609fe7c742"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<style scoped>",
+          "style": {
+            "code": true
+          },
+          "id": "4b791f4e-34b6-4482-bfca-74a84d549fc4"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " — Vue will scope the styles to the contents of your SFC. This works similar to CSS-in-JS solutions, but allows you to just write plain CSS.",
+          "style": {},
+          "id": "386af803-7093-4218-940a-52968be222c6"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "af6ed1eb-32ed-4047-a281-da7e6e50a44e"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Note: If you select a CSS pre-processor when creating the project via the CLI, you can add a ",
+          "style": {},
+          "id": "6e1ffba6-c69f-48d4-a6df-6e51440c95ff"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "lang",
+          "style": {
+            "code": true
+          },
+          "id": "2248e1f3-8913-4986-84b9-a9013aa7bf79"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " attribute to the ",
+          "style": {},
+          "id": "6b6586e5-94b0-4503-b0e2-77312e67c8d2"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<style>",
+          "style": {
+            "code": true
+          },
+          "id": "0102768b-6689-4c1f-b826-c0aaac146035"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " tag so that the contents can be processed by Webpack at build time. For example, ",
+          "style": {},
+          "id": "5d958e27-308d-48ae-a7f1-80b757fc0ff6"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<style lang=\"scss\">",
+          "style": {
+            "code": true
+          },
+          "id": "b5b323f8-c8c0-41df-8360-0c8d4f42dbd1"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " will allow you to use SCSS syntax in your styling information.",
+          "style": {},
+          "id": "af6801e7-571f-4f78-bdd1-13209c216dd5"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "a2f69a5d-b1bd-4f5b-84ed-8f5a3e454f79"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Running the app locally",
+          "style": {
+            "bold": true
+          },
+          "id": "b1396fbe-5a1b-426c-9026-2bdbca36524f"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "d2e154c5-5efa-4e12-9d85-6c74898acc1b"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "The Vue CLI comes with a built-in development server. This allows you to run your app locally so you can test it easily without needing to configure a server yourself. The CLI adds a ",
+          "style": {},
+          "id": "71086e06-2e80-4140-ae82-1460ec8689c1"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "serve",
+          "style": {
+            "code": true
+          },
+          "id": "be50ea4c-640e-435e-a374-942100fca15d"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " command to the project's ",
+          "style": {},
+          "id": "7ca6626c-7f65-4ad8-ad55-48c3d03d1bc8"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "package.json",
+          "style": {
+            "code": true
+          },
+          "id": "08c9c60c-e7eb-449a-84f7-56a201674ddc"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " file as an npm script, so you can easily run it.",
+          "style": {},
+          "id": "24f35de6-6597-4d3d-a30a-ad1261327559"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "77e62dd6-7717-49a6-84f5-69aa330fb3bd"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "In your terminal, try running ",
+          "style": {},
+          "id": "763a5699-fe06-483c-b290-43ccad57146f"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "npm run serve",
+          "style": {
+            "code": true
+          },
+          "id": "718f60aa-b2c5-4932-b80f-5f3cb05f33a6"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " (or ",
+          "style": {},
+          "id": "0148e107-25b5-42e6-a45b-549d1201b798"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "yarn serve",
+          "style": {
+            "code": true
+          },
+          "id": "b604ccd9-5a54-488c-980e-0a199b339991"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " if you prefer yarn). Your terminal should output something like the following:",
+          "style": {},
+          "id": "135066e0-af87-4d88-a5fb-bed3f2b376a1"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "2bca00dd-8cac-485f-a5ec-825cdc6d4a59"
+    },
+    {
+      "type": "Block/Code",
+      "code": "INFO  Starting development server...\n98% after emitting CopyPlugin\n\n  DONE  Compiled successfully in 18121ms\n\n  App running at:\n  - Local:   <http://localhost:8080/>\n  - Network: <http://192.168.1.9:8080/>\n\n  Note that the development build is not optimized.\n  To create a production build, run npm run build.",
+      "language": "plaintext",
+      "id": "db72d762-d9c9-4b35-b844-3d10f15c7b56"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "If you navigate to the \"local\" address in a new browser tab (this should be something like ",
+          "style": {},
+          "id": "70cb63be-471f-4e19-a3dc-177131c92fc2"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "http://localhost:8080",
+          "style": {
+            "code": true
+          },
+          "id": "a773cc7d-6b4e-4442-b892-1e2e1d6daa5d"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " as stated above, but may vary based on your setup), you should see your app. Right now, it should contain a welcome message, a link to the Vue documentation, links to the plugins you added when you initialized the app with your CLI, and some other useful links to the Vue community and ecosystem.",
+          "style": {},
+          "id": "99389c80-6a7b-47a0-a75e-03b2a994b750"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "9946ed6e-bc45-4265-85b4-efbc1d7bd83d"
+    },
+    {
+      "type": "Block/Image",
+      "src": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Client-side_JavaScript_frameworks/Vue_getting_started/vue-default-app.png",
+      "caption": "default Vue app render, with Vue logo, welcome message, and some documentation links",
+      "id": "b67f52fd-d064-43c3-ad5d-d30cc1ef29cc"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Making a couple of changes",
+          "style": {
+            "bold": true
+          },
+          "id": "f5ec495b-944b-4a93-86df-77fbef3bff26"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "08022628-6a3a-4d30-849a-c959243a9950"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Let's make our first change to the app — we'll delete the Vue logo. Open the ",
+          "style": {},
+          "id": "89ac4afd-50f8-4561-88ba-baefe08c8074"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "App.vue",
+          "style": {
+            "code": true
+          },
+          "id": "3f64a10b-2b71-4ec6-89a7-7b45ce3d428a"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " file, and delete the ",
+          "style": {},
+          "id": "610d3b3b-964e-402f-a61e-a178ccdf4513"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<img>",
+          "style": {
+            "underline": true,
+            "code": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img"
+            }
+          },
+          "id": "fee9f8e6-7c59-4177-b6b7-5303ccf5a400"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " element from the template section:",
+          "style": {},
+          "id": "c91da429-4342-40f3-927a-fd85c06f1748"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "476b42aa-d126-4478-9990-910627043221"
+    },
+    {
+      "type": "Block/Code",
+      "code": "<img alt=\"Vue logo\" src=\"./assets/logo.png\" />",
+      "language": "html",
+      "id": "2ee69d98-d1ba-4788-99e9-09ed7de5504d"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "If your server is still running, you should see the logo removed from the rendered site almost instantly. Let's also remove the ",
+          "style": {},
+          "id": "98c48cd4-edf3-423f-b0d1-508fe2ddd708"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "HelloWorld",
+          "style": {
+            "code": true
+          },
+          "id": "9daed547-1c0c-46c7-9c6e-58da40f2609a"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " component from our template.",
+          "style": {},
+          "id": "1804a7fd-febd-4d30-9749-b44defa1ac52"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "25ef3034-b540-4088-94e5-e972e18bb78e"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "First of all delete this line:",
+          "style": {},
+          "id": "5c6c2936-4f30-4c55-8c1e-404f782be778"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "36543a36-f521-429b-94dd-e000718fb0dc"
+    },
+    {
+      "type": "Block/Code",
+      "code": "<HelloWorld msg=\"Welcome to Your Vue.js App\" />",
+      "language": "html",
+      "id": "cec0d02d-f54c-4421-a461-a21f87b5216c"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "If you save your ",
+          "style": {},
+          "id": "f01417e2-6ceb-4d77-9349-822a8b1b2d37"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "App.vue",
+          "style": {
+            "code": true
+          },
+          "id": "a4891e21-7a6b-42c5-b89c-6b67cc907a60"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " file now, the rendered app will throw an error because we've registered the component but are not using it. We also need to remove the lines from inside the ",
+          "style": {},
+          "id": "66c29973-8f33-4d9d-a7c1-3db857aa702c"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<script>",
+          "style": {
+            "code": true
+          },
+          "id": "e599db61-6fcb-4608-937c-a2840a09312c"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " element that import and register the component:",
+          "style": {},
+          "id": "120f3b49-11bd-4655-9c8c-a5c84888d7d8"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "1551737d-eeb2-48c9-a8bd-25fad78a16c4"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Delete these lines now:",
+          "style": {},
+          "id": "9d59152b-3306-4f2a-a28f-98129f106d64"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "f71d2657-2b4c-4288-9a99-19ad83110f71"
+    },
+    {
+      "type": "Block/Code",
+      "code": "import HelloWorld from \"./components/HelloWorld.vue\";",
+      "language": "javascript",
+      "id": "313c9e5c-cea7-4433-b931-3c12a864e299"
+    },
+    {
+      "type": "Block/Code",
+      "code": "components: {\n  HelloWorld\n}",
+      "language": "javascript",
+      "id": "7cce2d3e-262f-4208-bef6-7e7d4880ce7f"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "The ",
+          "style": {},
+          "id": "78de1ee1-87f4-4987-97d6-9d3bbaed7329"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<template>",
+          "style": {
+            "code": true
+          },
+          "id": "2cd4ad90-7a94-4678-9073-ef62a03fc131"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " tag is empty now so you'll see an error saying ",
+          "style": {},
+          "id": "85fd6427-7622-4d26-9360-745cb61a803f"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "The template requires child element",
+          "style": {
+            "code": true
+          },
+          "id": "c4b008c5-b3ca-41ad-854e-56e41bafec4e"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " in both the console and the rendered app. You can fix this by adding some content inside the ",
+          "style": {},
+          "id": "79626ae7-2bc7-409e-8a5b-21b1f62d564d"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<template>",
+          "style": {
+            "code": true
+          },
+          "id": "4d7b6036-4566-455e-bc77-46cb9165dfc9"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " tag and we can start with a new ",
+          "style": {},
+          "id": "ddf5c975-80e6-4f4b-b53b-15a63654081a"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<h1>",
+          "style": {
+            "code": true
+          },
+          "id": "a61f11a0-7d9d-4c5a-95dc-14d43f70818c"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " element inside a ",
+          "style": {},
+          "id": "667c971a-71b6-471c-b3ca-dd72920cf73b"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "<div>",
+          "style": {
+            "code": true
+          },
+          "id": "f5043a48-a1ca-4bb4-b58b-9b334f95f330"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ". Since we're going to be creating a todo list app below, let's set our heading to \"To-Do List\" like so:",
+          "style": {},
+          "id": "ddd6f0c9-ef3c-4c6b-80a5-c6801ef58f2e"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "b46a77db-f122-4aff-9448-2c913a89cee9"
+    },
+    {
+      "type": "Block/Code",
+      "code": "<template>\n  <div id=\"app\">\n    <h1>To-Do List</h1>\n  </div>\n</template>",
+      "language": "html",
+      "id": "c2e8a8a7-a67f-4b02-8c2f-dc192f9db2b5"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "App.vue",
+          "style": {
+            "code": true
+          },
+          "id": "aa89d3bd-a062-4ee7-a67d-77537db54d18"
+        },
+        {
+          "type": "Inline/Text",
+          "text": " will now show our heading, as you'd expect.",
+          "style": {},
+          "id": "a237c401-ec9a-46dc-bcbd-fee8640ac495"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "cc1634a7-1733-48ac-8fb4-a41a55abac13"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Summary",
+          "style": {
+            "bold": true
+          },
+          "id": "1c046569-4f09-430d-9737-5e5558229d9a"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "1b6ea9e9-07a0-4167-9b3e-a7990420f4ff"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Let's leave this here for now. We've learnt about some of the ideas behind Vue, created some scaffolding for our example app to live inside, inspected it, and made a few preliminary changes.",
+          "style": {},
+          "id": "dc28e504-4f3b-481f-b5da-90ea2f422eee"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "ff3bad95-b763-45cf-8042-b15ef269fcaf"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "With a basic introduction out of the way, we'll now go further and build up our sample app, a basic Todo list application that allows us to store a list of items, check them off when done, and filter the list by all, complete, and incomplete todos.",
+          "style": {},
+          "id": "393b0db2-f690-4e57-b145-384e72ad447d"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "4954307d-ef37-4687-b429-76d122fbde97"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "In the next article we'll build our first custom component, and look at some important concepts such as passing props into it and saving its data state.",
+          "style": {},
+          "id": "1174cec1-79e0-4d2f-bb4c-f3d39cd1adff"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "0659780d-de1a-4d0f-ad1a-f29138e9a496"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Previous",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Client-side_JavaScript_frameworks/Ember_resources"
+            }
+          },
+          "id": "619e5f9f-7e16-4784-b854-1ddea5291d27"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "96b0182f-6ad1-4a19-aa42-69a006353d65"
+      },
+      "id": "d838af63-f264-4058-8461-69c72fbb4aae"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Overview: Client-side JavaScript frameworks",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Client-side_JavaScript_frameworks"
+            }
+          },
+          "id": "d258a1aa-c5a5-4d21-a344-b22ce8216be8"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "96b0182f-6ad1-4a19-aa42-69a006353d65"
+      },
+      "id": "9a2ba0a8-4aa3-455b-978c-03604797d786"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Next",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Client-side_JavaScript_frameworks/Vue_first_component"
+            }
+          },
+          "id": "6d97686a-7449-41fd-bf0e-3181316c3ef3"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "96b0182f-6ad1-4a19-aa42-69a006353d65"
+      },
+      "id": "a6497696-672f-4a9f-81f1-659262ce2e86"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Found a content problem with this page?",
+          "style": {
+            "bold": true
+          },
+          "id": "ce77b1bd-4552-4f3e-9afe-43004c577ff4"
+        }
+      ],
+      "style": {
+        "type": "Heading 2"
+      },
+      "id": "31375813-54fe-48d5-a909-6dd6d162493b"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Edit the page ",
+          "style": {},
+          "id": "31bb57c1-094d-452b-a87d-5130ab5e2283"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "on GitHub",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://github.com/mdn/content/edit/main/files/en-us/learn/tools_and_testing/client-side_javascript_frameworks/vue_getting_started/index.md"
+            }
+          },
+          "id": "1451b3f4-9bdd-466a-9525-7eeb7be30ef8"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "b2092be1-064f-4afe-9b7b-2066069f4cff"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "12a72a47-190f-4007-bb0e-2278123dc97a"
+      },
+      "id": "3e6d8e17-6929-450c-9fb1-7522bf8bc5a0"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Report the ",
+          "style": {},
+          "id": "b0be71eb-e161-451b-9d29-72f4e66d9a7f"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "content issue",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://github.com/mdn/content/issues/new?template=page-report.yml&mdn-url=https%3A%2F%2Fdeveloper.mozilla.org%2Fen-US%2Fdocs%2FLearn%2FTools_and_testing%2FClient-side_JavaScript_frameworks%2FVue_getting_started&metadata=%3C%21--+Do+not+make+changes+below+this+line+--%3E%0A%3Cdetails%3E%0A%3Csummary%3EPage+report+details%3C%2Fsummary%3E%0A%0A*+Folder%3A+%60en-us%2Flearn%2Ftools_and_testing%2Fclient-side_javascript_frameworks%2Fvue_getting_started%60%0A*+MDN+URL%3A+https%3A%2F%2Fdeveloper.mozilla.org%2Fen-US%2Fdocs%2FLearn%2FTools_and_testing%2FClient-side_JavaScript_frameworks%2FVue_getting_started%0A*+GitHub+URL%3A+https%3A%2F%2Fgithub.com%2Fmdn%2Fcontent%2Fblob%2Fmain%2Ffiles%2Fen-us%2Flearn%2Ftools_and_testing%2Fclient-side_javascript_frameworks%2Fvue_getting_started%2Findex.md%0A*+Last+commit%3A+https%3A%2F%2Fgithub.com%2Fmdn%2Fcontent%2Fcommit%2F4a5ceb89ac004d087669aeee3c26475c2207787f%0A*+Document+last+modified%3A+2023-02-16T03%3A45%3A41.000Z%0A%0A%3C%2Fdetails%3E"
+            }
+          },
+          "id": "11760add-9d55-4ad1-8681-873123385fef"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "da4e1d46-bccf-420f-84ab-40cf54cbf7fc"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "12a72a47-190f-4007-bb0e-2278123dc97a"
+      },
+      "id": "f50762f8-6615-4174-9a67-cfec42ee4ea7"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "View the source ",
+          "style": {},
+          "id": "dff2ea49-8c4d-4325-a75d-104239ea59a0"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "on GitHub",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://github.com/mdn/content/blob/main/files/en-us/learn/tools_and_testing/client-side_javascript_frameworks/vue_getting_started/index.md?plain=1"
+            }
+          },
+          "id": "5ba02c91-40cd-4721-896e-18fdceb83089"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "a196f5ad-d90e-4635-9fde-ba8ecb0b6b6b"
+        }
+      ],
+      "style": {
+        "type": "Bullet List",
+        "listId": "12a72a47-190f-4007-bb0e-2278123dc97a"
+      },
+      "id": "23ab959d-b451-492f-9845-fbd2d966e76a"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "Want to get more involved? Learn ",
+          "style": {},
+          "id": "0df2e75e-62e5-4ccc-9296-3954a66c4c39"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "how to contribute",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://github.com/mdn/content/blob/main/CONTRIBUTING.md"
+            }
+          },
+          "id": "b10143ae-4e25-40f6-bc61-4f4bc9f831fc"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "53a59065-469d-4d17-b944-ed626c9a4846"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "d6184d5c-364e-4d5c-a558-be64264f93aa"
+    },
+    {
+      "type": "Block/Paragraph",
+      "children": [
+        {
+          "type": "Inline/Text",
+          "text": "This page was last modified on Feb 16, 2023 by ",
+          "style": {},
+          "id": "2ff01a3b-9f76-41c0-b6d2-58c9dc4ab421"
+        },
+        {
+          "type": "Inline/Text",
+          "text": "MDN contributors",
+          "style": {
+            "underline": true,
+            "link": {
+              "href": "https://developer.mozilla.org/en-US/docs/Learn/Tools_and_testing/Client-side_JavaScript_frameworks/Vue_getting_started/contributors.txt"
+            }
+          },
+          "id": "9355c913-e53c-4b88-8129-6b397d86c4d1"
+        },
+        {
+          "type": "Inline/Text",
+          "text": ".",
+          "style": {},
+          "id": "6f68f8bf-b8c8-4f35-8638-35dc4b949442"
+        }
+      ],
+      "style": {
+        "type": "Default"
+      },
+      "id": "00b92ce2-d184-4e5d-a2d9-de130076f463"
     }
   ],
-  "id": "e60de0f7-f13a-4d5f-a15f-71de24835d74"
+  "id": "56a47a6d-5624-48db-9c4c-0d6659904b32"
 }

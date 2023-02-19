@@ -21,6 +21,7 @@ import React, {
   cloneElement,
   createContext,
   memo,
+  useCallback,
   useContext,
   useEffect,
   useLayoutEffect,
@@ -104,7 +105,6 @@ interface TableRow {
 
 interface TableNode {
   type: BlockNodeType.Table;
-  isBlock: true;
   rows: TableRow[];
   numColumns: number;
   id: string;
@@ -135,7 +135,6 @@ interface BlockSelection {
 
 interface ImageNode {
   type: BlockNodeType.Image;
-  isBlock: true;
   src: string;
   caption: string;
   id: string;
@@ -153,7 +152,6 @@ enum CodeBlockLanguage {
 
 interface CodeBlockNode {
   type: BlockNodeType.Code;
-  isBlock: true;
   code: string;
   language: CodeBlockLanguage;
   id: string;
@@ -218,7 +216,6 @@ type ParagraphStyle =
 
 interface ParagraphNode {
   type: BlockNodeType.Paragraph;
-  isBlock: false;
   children: InlineNode[];
   style: ParagraphStyle;
   id: string;
@@ -245,7 +242,6 @@ interface TextStyle {
 
 interface TextNode {
   type: InlineNodeType.Text;
-  isBlock: false;
   text: string;
   style: TextStyle;
   id: string;
@@ -283,7 +279,6 @@ function makeParagraph(
 ): ParagraphNode {
   return {
     type: BlockNodeType.Paragraph,
-    isBlock: false,
     children,
     style,
     id,
@@ -377,7 +372,6 @@ function makeCodeBlock(
 ): CodeBlockNode {
   return {
     type: BlockNodeType.Code,
-    isBlock: true,
     code,
     language,
     id,
@@ -391,7 +385,6 @@ function makeTable(
 ): TableNode {
   return {
     type: BlockNodeType.Table,
-    isBlock: true,
     rows,
     numColumns,
     id,
@@ -415,7 +408,6 @@ function makeTableCell(value: EditorValue, id: string): TableCell {
 function makeImage(src: string, caption: string, id: string): ImageNode {
   return {
     type: BlockNodeType.Image,
-    isBlock: true,
     src,
     caption,
     id,
@@ -425,7 +417,6 @@ function makeImage(src: string, caption: string, id: string): ImageNode {
 function makeText(text: string, style: TextStyle, id: string): TextNode {
   return {
     type: InlineNodeType.Text,
-    isBlock: false,
     text,
     style,
     id,
@@ -445,21 +436,19 @@ function makeEditorValue(blocks: BlockNode[], id: string): EditorValue {
 
 interface ReactTableNodeProps {
   value: TableNode;
-  queueCommand: (cmd: Command) => void;
 }
 function ReactTableNode_({
   value,
   selectedCells,
-  queueCommand,
 }: ReactTableNodeProps & { selectedCells: string[] }): JSX.Element {
   return (
-    <div className="table-container">
-      <table
-        className="block-table"
-        data-family={EditorFamilyType.Block}
-        data-type={BlockNodeType.Table}
-        data-id={value.id}
-      >
+    <div
+      className="table-container"
+      data-family={EditorFamilyType.Block}
+      data-type={BlockNodeType.Table}
+      data-id={value.id}
+    >
+      <table className="block-table">
         <tbody className="block-table__tbody">
           {value.rows.map((row) => {
             return (
@@ -477,10 +466,7 @@ function ReactTableNode_({
                         .filter(Boolean)
                         .join(' ')}
                     >
-                      <ReactEditorValue
-                        value={cell.value}
-                        queueCommand={queueCommand}
-                      />
+                      <ReactEditorValue value={cell.value} />
                     </td>
                   );
                 })}
@@ -499,10 +485,7 @@ const ReactTableNode_m = memo(ReactTableNode_, (a, b) => {
     a.selectedCells.every((id, i) => b.selectedCells[i] === id)
   );
 });
-function ReactTableNode({
-  value,
-  queueCommand,
-}: ReactTableNodeProps): JSX.Element {
+function ReactTableNode({ value }: ReactTableNodeProps): JSX.Element {
   const selectedEditors = useContext(SelectedEditorsContext);
   const selectedCells = useMemo(() => {
     let selectedCells: string[] = [];
@@ -515,20 +498,18 @@ function ReactTableNode({
     });
     return selectedCells;
   }, [value, selectedEditors]);
-  if (selectedEditors.length !== 0) {
-  }
-  return (
-    <ReactTableNode_m
-      value={value}
-      queueCommand={queueCommand}
-      selectedCells={selectedCells}
-    />
-  );
+  return <ReactTableNode_m value={value} selectedCells={selectedCells} />;
 }
 
-function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
-  const selectedBlocks = useContext(SelectedBlocksContext);
-  const isSelected = selectedBlocks.includes(value.id);
+interface ReactBlockImageNodeProps {
+  value: ImageNode;
+}
+function ReactBlockImageNode_({
+  value,
+  isSelected,
+}: ReactBlockImageNodeProps & { isSelected: boolean }): JSX.Element {
+  const queueCommand = useContext(QueueCommandContext);
+  const editorId = useContext(EditorIdContext);
   return (
     <div
       className="img-container"
@@ -539,7 +520,26 @@ function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
       <span className="block-placeholder-br">
         <br />
       </span>
-      <div contentEditable={false}>
+      <div
+        contentEditable={false}
+        onClick={() => {
+          queueCommand({
+            type: CommandType.Selection,
+            selection: {
+              type: SelectionType.Block,
+              editorId,
+              start: {
+                type: BlockSelectionPointType.OtherBlock,
+                blockId: value.id,
+              },
+              end: {
+                type: BlockSelectionPointType.OtherBlock,
+                blockId: value.id,
+              },
+            },
+          });
+        }}
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           className={['img', isSelected && 'img--selected']
@@ -552,7 +552,14 @@ function ReactBlockImageNode_({ value }: { value: ImageNode }): JSX.Element {
     </div>
   );
 }
-const ReactBlockImageNode = memo(ReactBlockImageNode_);
+const ReactBlockImageNode_m = memo(ReactBlockImageNode_, (prev, cur) => {
+  return prev.value === cur.value && prev.isSelected === cur.isSelected;
+});
+function ReactBlockImageNode({ value }: ReactBlockImageNodeProps): JSX.Element {
+  const selectedBlocks = useContext(SelectedBlocksContext);
+  const isSelected = selectedBlocks.includes(value.id);
+  return <ReactBlockImageNode_m value={value} isSelected={isSelected} />;
+}
 
 const prismTheme: PrismTheme = {
   plain: {
@@ -655,14 +662,10 @@ const useIsomorphicLayoutEffect =
 
 interface ReactCodeBlockNodeProps {
   value: CodeBlockNode;
-  editorId: string;
-  queueCommand: (cmd: Command) => void;
 }
 
 function ReactCodeBlockNode_({
   value,
-  editorId,
-  queueCommand,
   isSelected,
 }: ReactCodeBlockNodeProps & {
   isSelected: boolean;
@@ -671,6 +674,8 @@ function ReactCodeBlockNode_({
     useRef<import('monaco-editor').editor.IStandaloneCodeEditor>();
   const [height, setHeight] = useState(0);
   const callback = useRef<any>();
+  const queueCommand = useContext(QueueCommandContext);
+  const editorId = useContext(EditorIdContext);
   callback.current = (code: string) => {
     if (code === value.code) {
       return;
@@ -679,7 +684,7 @@ function ReactCodeBlockNode_({
       type: CommandType.Input,
       selection: {
         type: SelectionType.Block,
-        editorId,
+        editorId: editorId,
         start: {
           type: BlockSelectionPointType.OtherBlock,
           blockId: value.id,
@@ -825,7 +830,6 @@ function ReactCodeBlockNode_({
       clearTimeout(timeoutHandle);
     };
   }, [copyState, setCopyState]);
-  const selectedBlocks = useContext(SelectedBlocksContext);
   const [isFocused, setIsFocused] = useState(false);
   return (
     <pre
@@ -940,6 +944,10 @@ function ReactCodeBlockNode_({
                 editor.onDidContentSizeChange(updateHeight);
                 editor.onDidFocusEditorText(() => {
                   setIsFocused(true);
+                  queueCommand({
+                    type: CommandType.Selection,
+                    selection: null,
+                  });
                 });
                 editor.onDidBlurEditorText(() => {
                   setIsFocused(false);
@@ -954,21 +962,10 @@ function ReactCodeBlockNode_({
   );
 }
 const ReactCodeBlockNode_m = memo(ReactCodeBlockNode_);
-function ReactCodeBlockNode({
-  value,
-  queueCommand,
-  editorId,
-}: ReactCodeBlockNodeProps): JSX.Element {
+function ReactCodeBlockNode({ value }: ReactCodeBlockNodeProps): JSX.Element {
   const selectedBlocks = useContext(SelectedBlocksContext);
   const isSelected = selectedBlocks.includes(value.id);
-  return (
-    <ReactCodeBlockNode_
-      value={value}
-      queueCommand={queueCommand}
-      editorId={editorId}
-      isSelected={isSelected}
-    />
-  );
+  return <ReactCodeBlockNode_m value={value} isSelected={isSelected} />;
 }
 
 const preloadComponents = [
@@ -1104,7 +1101,7 @@ function ReactParagraphNode_(props: {
   const { value } = props;
   const isEmpty =
     value.children.length === 1 &&
-    !value.children[0].isBlock &&
+    value.children[0].type === InlineNodeType.Text &&
     value.children[0].text === '';
   let children: JSX.Element | JSX.Element[];
   if (isEmpty) {
@@ -1115,7 +1112,7 @@ function ReactParagraphNode_(props: {
     groupArr(
       value.children,
       (inline) => {
-        if (!inline.isBlock && inline.style.link) {
+        if (inline.type === InlineNodeType.Text && inline.style.link) {
           return { link: inline.style.link };
         }
         return null;
@@ -1133,9 +1130,13 @@ function ReactParagraphNode_(props: {
                   ? null
                   : value.children[i_ + 1];
               const isFirst =
-                !prevChild || (!prevChild.isBlock && !prevChild.style.code);
+                !prevChild ||
+                (prevChild.type === InlineNodeType.Text &&
+                  !prevChild.style.code);
               const isLast =
-                !nextChild || (!nextChild.isBlock && !nextChild.style.code);
+                !nextChild ||
+                (nextChild.type === InlineNodeType.Text &&
+                  !nextChild.style.code);
               return (
                 <ReactTextNode
                   value={inline}
@@ -1385,12 +1386,10 @@ function groupArr<T, G>(
 
 interface ReactEditorValueProps {
   value: EditorValue;
-  queueCommand: (cmd: Command) => void;
 }
 function ReactEditorValue_({
   value,
   listBlockIdToIdx,
-  queueCommand,
 }: ReactEditorValueProps & {
   listBlockIdToIdx: Record<string, number>;
 }): JSX.Element {
@@ -1487,24 +1486,11 @@ function ReactEditorValue_({
           break;
         }
         case BlockNodeType.Table: {
-          children.push(
-            <ReactTableNode
-              value={block}
-              queueCommand={queueCommand}
-              key={block.id}
-            />,
-          );
+          children.push(<ReactTableNode value={block} key={block.id} />);
           break;
         }
         case BlockNodeType.Code: {
-          children.push(
-            <ReactCodeBlockNode
-              value={block}
-              editorId={value.id}
-              queueCommand={queueCommand}
-              key={block.id}
-            />,
-          );
+          children.push(<ReactCodeBlockNode value={block} key={block.id} />);
           break;
         }
         case BlockNodeType.Paragraph: {
@@ -1524,27 +1510,22 @@ function ReactEditorValue_({
     });
   });
   return (
-    <div
-      className="editor-container"
-      data-family={EditorFamilyType.Editor}
-      data-id={value.id}
-    >
-      {children}
-    </div>
+    <EditorIdContext.Provider value={value.id}>
+      <div
+        className="editor-container"
+        data-family={EditorFamilyType.Editor}
+        data-id={value.id}
+      >
+        {children}
+      </div>
+    </EditorIdContext.Provider>
   );
 }
 const ReactEditorValue_m = memo(ReactEditorValue_);
-function ReactEditorValue({
-  value,
-  queueCommand,
-}: ReactEditorValueProps): JSX.Element {
+function ReactEditorValue({ value }: ReactEditorValueProps): JSX.Element {
   const listBlockIdToIdx = useContext(NumberedListIndicesContext);
   return (
-    <ReactEditorValue_m
-      value={value}
-      queueCommand={queueCommand}
-      listBlockIdToIdx={listBlockIdToIdx}
-    />
+    <ReactEditorValue_m value={value} listBlockIdToIdx={listBlockIdToIdx} />
   );
 }
 
@@ -1704,7 +1685,7 @@ function findPoint(
           };
         }
         const para = subValue.blocks[idx];
-        if (para.isBlock) {
+        if (para.type !== BlockNodeType.Paragraph) {
           throw new Error();
         }
         let offset = 0;
@@ -1714,7 +1695,7 @@ function findPoint(
             offset += nearestOffset;
             break;
           }
-          offset += node.isBlock ? 1 : node.text.length;
+          offset += node.type !== InlineNodeType.Text ? 1 : node.text.length;
         }
         return {
           stop: true,
@@ -1759,7 +1740,7 @@ function walkEditorValues<T>(
     data: T,
     ids: {
       parentEditor: EditorValue;
-      parentBlock: Extract<BlockNode, { isBlock: true }>;
+      parentBlock: TableNode;
     } | null,
   ) => { data: T; newValue?: EditorValue; stop: boolean; stopCur?: boolean },
   initialData: T,
@@ -1866,12 +1847,12 @@ function findSelection(
   const startPoint = findPoint(value, range.startContainer, range.startOffset);
   const endPoint = findPoint(value, range.endContainer, range.endOffset);
   if (startPoint.editorId === endPoint.editorId) {
-    return {
+    return fixSelection(value, {
       type: SelectionType.Block,
       editorId: startPoint.editorId,
       start: isBackwards ? endPoint.point : startPoint.point,
       end: isBackwards ? startPoint.point : endPoint.point,
-    };
+    });
   }
   function getParentTables(
     editorId: string,
@@ -2195,14 +2176,20 @@ function fixParagraph(paragraph: ParagraphNode): ParagraphNode {
     );
   }
   let children = paragraph.children;
-  if (children.some((child) => !child.isBlock && child.text === '')) {
-    children = children.filter((child) => child.isBlock || child.text !== '');
+  if (
+    children.some(
+      (child) => child.type === InlineNodeType.Text && child.text === '',
+    )
+  ) {
+    children = children.filter(
+      (child) => child.type !== InlineNodeType.Text || child.text !== '',
+    );
   }
   let newChildren = [children[0]];
   for (let i = 1; i < children.length; i++) {
     const prev = newChildren[newChildren.length - 1];
     const cur = children[i];
-    if (prev.isBlock || cur.isBlock) {
+    if (prev.type !== InlineNodeType.Text || cur.type !== InlineNodeType.Text) {
       newChildren.push(cur);
       continue;
     }
@@ -2287,13 +2274,12 @@ function removeTextFromParagraph(
   startOffset: number,
   endOffset: number,
 ): ParagraphNode {
-  console.log(paragraph);
   const newParagraphChildren = [];
   let len = 0;
   for (let i = 0; i < paragraph.children.length; i++) {
     const child = paragraph.children[i];
     let prevLen = len;
-    len += child.isBlock ? 1 : child.text.length;
+    len += child.type !== InlineNodeType.Text ? 1 : child.text.length;
     if (startOffset >= len || endOffset <= prevLen) {
       newParagraphChildren.push(child);
       continue;
@@ -2410,7 +2396,7 @@ function removeSelection(
             if (i < startIndex || i > endIndex) {
               newBlocks.push(block);
             }
-            if (block.isBlock) {
+            if (block.type !== BlockNodeType.Paragraph) {
               if (
                 block.id === range.end.blockId &&
                 range.start.type === BlockSelectionPointType.OtherBlock
@@ -2730,8 +2716,14 @@ function mapNodes(
   //     block: Extract<BlockNode, { isBlock: true }>,
   //   ) => Extract<BlockNode, { isBlock: true }>,
   mapNonTextInline: (
-    block: Extract<InlineNode, { isBlock: true }>,
-  ) => Extract<InlineNode, { isBlock: true }>,
+    block: Extract<
+      InlineNode,
+      { type: Exclude<InlineNodeType, InlineNodeType.Text> }
+    >,
+  ) => Extract<
+    InlineNode,
+    { type: Exclude<InlineNodeType, InlineNodeType.Text> }
+  >,
   mapParagraphSyle: (style: ParagraphStyle) => ParagraphStyle,
   mapTextStyle: (style: TextStyle) => TextStyle,
 ): {
@@ -2762,7 +2754,7 @@ function mapNodes(
   function updateParaText(para: ParagraphNode) {
     return makeParagraph(
       para.children.map((child) => {
-        if (child.isBlock) {
+        if (child.type !== InlineNodeType.Text) {
           // TODO
           // @ts-expect-error
           return mapNonTextInline(child);
@@ -2784,7 +2776,7 @@ function mapNodes(
       if (isSelected) {
         const newValue = makeEditorValue(
           subValue.blocks.map((block) => {
-            if (block.isBlock) {
+            if (block.type !== BlockNodeType.Paragraph) {
               return block;
               //   return mapNonParagraphBlock(block);
             }
@@ -2822,7 +2814,7 @@ function mapNodes(
         ) {
           const newValue = makeEditorValue(
             subValue.blocks.map((block) => {
-              if (block.isBlock) {
+              if (block.type !== BlockNodeType.Paragraph) {
                 return block;
                 //   return mapNonParagraphBlock(block);
               }
@@ -2862,7 +2854,7 @@ function mapNodes(
           if (ids.parentBlock.type === BlockNodeType.Table) {
             const newValue = makeEditorValue(
               subValue.blocks.map((block) => {
-                if (block.isBlock) {
+                if (block.type !== BlockNodeType.Paragraph) {
                   return block;
                   //   return mapNonParagraphBlock(block);
                 }
@@ -2888,9 +2880,10 @@ function mapNodes(
       ): boolean {
         return (
           paraA.children.length > 0 &&
-          !paraA.children[paraA.children.length - 1].isBlock &&
+          paraA.children[paraA.children.length - 1].type ===
+            InlineNodeType.Text &&
           paraB.children.length > 0 &&
-          !paraB.children[0].isBlock &&
+          paraB.children[0].type === InlineNodeType.Text &&
           paraA.children[paraA.children.length - 1].id === paraB.children[0].id
         );
       }
@@ -2918,7 +2911,7 @@ function mapNodes(
         );
         const newValue = makeEditorValue(
           subValue.blocks.map((block, idx) => {
-            if (block.isBlock) {
+            if (block.type !== BlockNodeType.Paragraph) {
               return block;
             }
             if (startBlockIndex <= idx && idx <= endBlockIndex) {
@@ -3001,7 +2994,8 @@ function mapNodes(
 
 function getParagraphLength(paragraph: ParagraphNode): number {
   return paragraph.children.reduce(
-    (len, node) => len + (node.isBlock ? 1 : node.text.length),
+    (len, node) =>
+      len + (node.type !== InlineNodeType.Text ? 1 : node.text.length),
     0,
   );
 }
@@ -3057,7 +3051,7 @@ function insertSelection(
           const block = subValue.blocks[blockIndex] as ParagraphNode;
           const firstBlock = newValue.blocks[0];
           const newBlocks = subValue.blocks.slice(0, blockIndex);
-          if (firstBlock.isBlock) {
+          if (firstBlock.type !== BlockNodeType.Paragraph) {
             if (point.offset > 0) {
               newBlocks.push(
                 removeTextFromParagraph(block, point.offset, Infinity),
@@ -3097,7 +3091,7 @@ function insertSelection(
               firstText.style,
               editorCtrl.makeId(),
             );
-            if (lastBlock.isBlock) {
+            if (lastBlock.type !== BlockNodeType.Paragraph) {
               if (point.offset === 0) {
                 newBlocks.push(newPara);
                 endPoint = {
@@ -3130,7 +3124,7 @@ function insertSelection(
               };
             }
           } else {
-            if (lastBlock.isBlock) {
+            if (lastBlock.type !== BlockNodeType.Paragraph) {
               endPoint = {
                 type: BlockSelectionPointType.OtherBlock,
                 blockId: lastBlock.id,
@@ -3303,7 +3297,7 @@ function insertSelection(
                 }
                 const lastBlock = subValue.blocks[subValue.blocks.length - 1];
                 let point: ParagraphPoint | BlockPoint;
-                if (lastBlock.isBlock) {
+                if (lastBlock.type !== BlockNodeType.Paragraph) {
                   point = {
                     type: BlockSelectionPointType.OtherBlock,
                     blockId: lastBlock.id,
@@ -3421,7 +3415,7 @@ function makeDOMBlockPoint(
             };
           }
           const inlineNode = block.children[0];
-          if (inlineNode.isBlock) {
+          if (inlineNode.type !== InlineNodeType.Text) {
             throw new Error();
           }
           const node = editableElement.querySelector(
@@ -3439,7 +3433,10 @@ function makeDOMBlockPoint(
         for (let i = 0; i < block.children.length; i++) {
           const inlineNode = block.children[i];
           let start = end;
-          end += inlineNode.isBlock ? 1 : inlineNode.text.length;
+          end +=
+            inlineNode.type !== InlineNodeType.Text
+              ? 1
+              : inlineNode.text.length;
           if (start < point.offset && point.offset <= end) {
             const nodes = editableElement.querySelectorAll(
               `[data-id="${inlineNode.id}"]`,
@@ -3654,7 +3651,7 @@ function extractSelection(
         newBlocks.push(subValue.blocks[i]);
       }
       if (startIndex !== endIndex) {
-        if (endBlock.isBlock) {
+        if (endBlock.type !== BlockNodeType.Paragraph) {
           newBlocks.push(endBlock);
         } else {
           newBlocks.push(
@@ -3680,7 +3677,7 @@ function extractText(value: EditorValue): string {
   let text = '';
   function mapValue(value: EditorValue): void {
     value.blocks.forEach((block, idx) => {
-      if (block.isBlock) {
+      if (block.type !== BlockNodeType.Paragraph) {
         if (block.type === BlockNodeType.Table) {
           block.rows.map((row, rowIdx) => {
             row.cells.map((cell, cellIdx) => {
@@ -3905,7 +3902,7 @@ function anyBlockMatches(
         stop = true;
         return;
       }
-      if (block.isBlock && block.type === BlockNodeType.Table) {
+      if (block.type === BlockNodeType.Table) {
         for (let i = 0; i < block.rows.length && !stop; i++) {
           for (let j = 0; j < block.rows[i].cells.length && !stop; j++) {
             const cell = block.rows[i].cells[j];
@@ -3924,10 +3921,12 @@ function anyTextMatches(
   condition: (text: TextNode) => boolean,
 ): boolean {
   return anyBlockMatches(value, (block) => {
-    if (block.isBlock) {
+    if (block.type !== BlockNodeType.Paragraph) {
       return false;
     }
-    return block.children.some((child) => !child.isBlock && condition(child));
+    return block.children.some(
+      (child) => child.type === InlineNodeType.Text && condition(child),
+    );
   });
 }
 
@@ -4159,7 +4158,8 @@ function isParagraphStyleActive(
     fragment.blocks.some((block) => block.type === BlockNodeType.Paragraph) &&
     !anyBlockMatches(
       fragment,
-      (block) => !block.isBlock && !condition(block.style),
+      (block) =>
+        block.type === BlockNodeType.Paragraph && !condition(block.style),
     )
   );
 }
@@ -4216,7 +4216,8 @@ function toggleParagraphStyle(
   }
   const active = !anyBlockMatches(
     extractSelection(editorCtrl.value, selection),
-    (block) => !block.isBlock && !condition(block.style),
+    (block) =>
+      block.type === BlockNodeType.Paragraph && !condition(block.style),
   );
   const edit = mapNodes(
     editorCtrl,
@@ -4447,6 +4448,7 @@ enum CommandType {
   Undo,
   Redo,
   DeleteBackwardKey,
+  Selection,
 }
 type Command =
   | {
@@ -4477,6 +4479,11 @@ type Command =
         | CommandType.Undo
         | CommandType.DeleteBackwardKey;
       selection: Selection;
+      origin?: string;
+    }
+  | {
+      type: CommandType.Selection;
+      selection: Selection | null;
       origin?: string;
     };
 const cmds = {
@@ -5340,6 +5347,9 @@ function normalizeText(text: string): string {
   );
 }
 
+const QueueCommandContext = createContext<(cmd: Command) => void>(() => {});
+const EditorIdContext = createContext<string>('');
+
 function convertFromElToEditorValue(
   document: Document,
   el: HTMLElement,
@@ -5757,7 +5767,11 @@ function convertFromElToEditorValue(
       );
       const lastBlock =
         blocks.length > 0 ? blocks[blocks.length - 1] : undefined;
-      if (parentBlock === prevBlockParent && lastBlock && !lastBlock.isBlock) {
+      if (
+        parentBlock === prevBlockParent &&
+        lastBlock &&
+        lastBlock.type === BlockNodeType.Paragraph
+      ) {
         lastBlock.children.push(makeText(text, style, makeId()));
       } else {
         const para = makeParagraphFromNode(node);
@@ -5769,7 +5783,7 @@ function convertFromElToEditorValue(
   }
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
-    if (!block.isBlock) {
+    if (block.type === BlockNodeType.Paragraph) {
       blocks[i] = fixParagraph(block);
     }
   }
@@ -5817,29 +5831,55 @@ function ReactEditor({
     );
 
     isUpdatingSelection.current++;
-    native.removeAllRanges();
+    if (native.rangeCount > 1) {
+      native.removeAllRanges();
+    }
     if (
       getDirection(editorCtrl.current.value, newSelection) ===
       Direction.Backwards
     ) {
-      native.setBaseAndExtent(
-        range.endContainer,
-        range.endOffset,
-        range.startContainer,
-        range.startOffset,
-      );
+      if (
+        !(
+          range.endContainer === native.anchorNode &&
+          range.endOffset === native.anchorOffset &&
+          range.startContainer === native.focusNode &&
+          range.startOffset === native.focusOffset
+        )
+      ) {
+        native.setBaseAndExtent(
+          range.endContainer,
+          range.endOffset,
+          range.startContainer,
+          range.startOffset,
+        );
+        setTimeout(() => {
+          isUpdatingSelection.current--;
+        });
+      } else {
+        isUpdatingSelection.current--;
+      }
     } else {
-      native.setBaseAndExtent(
-        range.startContainer,
-        range.startOffset,
-        range.endContainer,
-        range.endOffset,
-      );
+      if (
+        !(
+          range.startContainer === native.anchorNode &&
+          range.startOffset === native.anchorOffset &&
+          range.endContainer === native.focusNode &&
+          range.endOffset === native.focusOffset
+        )
+      ) {
+        native.setBaseAndExtent(
+          range.startContainer,
+          range.startOffset,
+          range.endContainer,
+          range.endOffset,
+        );
+        setTimeout(() => {
+          isUpdatingSelection.current--;
+        });
+      } else {
+        isUpdatingSelection.current--;
+      }
     }
-
-    setTimeout(() => {
-      isUpdatingSelection.current--;
-    });
   };
 
   function pushState(
@@ -5892,6 +5932,16 @@ function ReactEditor({
         return;
       }
       const originalSelection = command.selection;
+      if (!originalSelection) {
+        newEditorCtrl = pushState(
+          newEditorCtrl,
+          newEditorCtrl.value,
+          null,
+          {},
+          PushStateAction.Selection,
+        );
+        return;
+      }
       let inputSelection = mapSelectionFns.reduce(
         (selection, mapSelection) => mapSelection(selection, true),
         originalSelection,
@@ -6369,6 +6419,14 @@ function ReactEditor({
             }
           }
         }
+      } else if (command.type === CommandType.Selection) {
+        newEditorCtrl = pushState(
+          newEditorCtrl,
+          newEditorCtrl.value,
+          inputSelection,
+          newEditorCtrl.textStyle,
+          PushStateAction.Selection,
+        );
       }
     }
     for (let i = 0; i < queue.length; i++) {
@@ -6376,6 +6434,9 @@ function ReactEditor({
     }
     if (ignoreSelectionN < queue.length) {
       newDomSelectionRef.current = newEditorCtrl.selection;
+      if (!newEditorCtrl.selection) {
+        editorRef.current!.blur();
+      }
     }
     if (editorCtrl.current !== newEditorCtrl) {
       editorCtrl.current = newEditorCtrl;
@@ -6387,7 +6448,8 @@ function ReactEditor({
 
   useEffect(() => {
     if (newDomSelectionRef.current !== null) {
-      updateSelection(newDomSelectionRef.current);
+      const sel = newDomSelectionRef.current;
+      updateSelection(sel);
       newDomSelectionRef.current = null;
       const selection = window.getSelection();
       if (!selection) {
@@ -6484,7 +6546,7 @@ function ReactEditor({
     function mapValue(value: EditorValue): EditorValue {
       return makeEditorValue(
         value.blocks.map((block) => {
-          if (block.isBlock) {
+          if (block.type !== BlockNodeType.Paragraph) {
             if (block.type === BlockNodeType.Table) {
               return makeTable(
                 block.rows.map((row) =>
@@ -6626,18 +6688,10 @@ function ReactEditor({
     const nativeSelection = window.getSelection()!;
 
     if (!isFocused() || nativeSelection.rangeCount === 0) {
-      if (editorCtrl.current.selection) {
-        editorCtrl.current = pushState(
-          editorCtrl.current,
-          editorCtrl.current.value,
-          null,
-          {},
-          PushStateAction.Selection,
-        );
-        flushSync(() => {
-          setRenderToggle((t) => !t);
-        });
-      }
+      queueCommand({
+        type: CommandType.Selection,
+        selection: null,
+      });
       return;
     }
 
@@ -6663,17 +6717,11 @@ function ReactEditor({
           offset: 0,
         },
       };
-      editorCtrl.current = pushState(
-        editorCtrl.current,
-        editorCtrl.current.value,
-        curSelection,
-        editorCtrl.current.textStyle,
-        PushStateAction.Selection,
-      );
-      updateSelection(curSelection);
-      flushSync(() => {
-        setRenderToggle((t) => !t);
+      queueCommand({
+        type: CommandType.Selection,
+        selection: curSelection,
       });
+      return;
     }
 
     const curSelection = findSelection(
@@ -6681,31 +6729,10 @@ function ReactEditor({
       nativeSelection.getRangeAt(0),
       isSelectionBackwards(nativeSelection),
     );
-
-    if (
-      (nativeSelection.anchorNode instanceof HTMLElement &&
-        nativeSelection.anchorNode.getAttribute('contenteditable') ===
-          'false') ||
-      (nativeSelection.focusNode instanceof HTMLElement &&
-        nativeSelection.focusNode.getAttribute('contenteditable') === 'false')
-    ) {
-      updateSelection(curSelection);
-    }
-    if (
-      JSON.stringify(curSelection) !==
-      JSON.stringify(editorCtrl.current.selection)
-    ) {
-      editorCtrl.current = pushState(
-        editorCtrl.current,
-        editorCtrl.current.value,
-        curSelection,
-        getSelectionTextStyle(editorCtrl.current.value, curSelection),
-        PushStateAction.Selection,
-      );
-      flushSync(() => {
-        setRenderToggle((t) => !t);
-      });
-    }
+    queueCommand({
+      type: CommandType.Selection,
+      selection: curSelection,
+    });
   };
 
   function copySelection(value: EditorValue, selection: Selection): void {
@@ -6724,12 +6751,7 @@ function ReactEditor({
                   <NumberedListIndicesContext.Provider
                     value={getListBlockIdToIdx(value)}
                   >
-                    <ReactEditorValue
-                      queueCommand={() => {
-                        throw new Error('Command queued in copy');
-                      }}
-                      value={curValue}
-                    />
+                    <ReactEditorValue value={curValue} />
                   </NumberedListIndicesContext.Provider>
                 </>,
               ),
@@ -6918,6 +6940,12 @@ function ReactEditor({
       false,
       false,
       (block, isSelected_, parentEditor) => {
+        if (
+          block.type !== BlockNodeType.Image &&
+          block.type !== BlockNodeType.Code
+        ) {
+          return;
+        }
         let isSelected = isSelected_;
         if (
           !isSelected &&
@@ -6948,6 +6976,13 @@ function ReactEditor({
   function getListBlockIdToIdx(value: EditorValue): Record<string, number> {
     let listIdToCount: Record<string, number> = {};
     let listBlockIdToIdx: Record<string, number> = {};
+    function range(start: number, endInclusive: number): number[] {
+      let nums: number[] = [];
+      for (let i = start; i <= endInclusive; i++) {
+        nums.push(i);
+      }
+      return nums;
+    }
     walkEditorValues(
       value,
       (_subValue, _data, _ids) => {
@@ -6960,17 +6995,27 @@ function ReactEditor({
       false,
       (block) => {
         if (
-          !block.isBlock &&
+          block.type === BlockNodeType.Paragraph &&
           block.style.type === ParagraphStyleType.NumberedList
         ) {
-          const { listId } = block.style;
+          const { indentLevel = 0, listId } = block.style;
           const blockId = block.id;
+          const key = JSON.stringify({ indentLevel, listId });
+          const hasHigherIndent = range(indentLevel + 1, MAX_INDENT).some(
+            (iL) =>
+              JSON.stringify({ indentLevel: iL, listId }) in listIdToCount,
+          );
+          if (hasHigherIndent) {
+            range(indentLevel + 1, MAX_INDENT).forEach((iL) => {
+              delete listIdToCount[JSON.stringify({ indentLevel: iL, listId })];
+            });
+          }
           let listIdx: number;
-          if (listId in listIdToCount) {
-            listIdx = listIdToCount[listId]++;
+          if (key in listIdToCount) {
+            listIdx = listIdToCount[key]++;
           } else {
             listIdx = 0;
-            listIdToCount[listId] = 1;
+            listIdToCount[key] = 1;
           }
           listBlockIdToIdx[blockId] = listIdx;
         }
@@ -6997,13 +7042,15 @@ function ReactEditor({
     () => selected.blocks,
     [selected.blocks],
     (prev, cur) =>
-      prev.length === cur.length && prev.every((v, i) => v === cur[i]),
+      prev[0].length === cur[0].length &&
+      prev[0].every((v, i) => v === cur[0][i]),
   );
   const selectedEditors = useCustomCompareMemo(
     () => selected.editors,
     [selected.editors],
     (prev, cur) =>
-      prev.length === cur.length && prev.every((v, i) => v === cur[i]),
+      prev[0].length === cur[0].length &&
+      prev[0].every((v, i) => v === cur[0][i]),
   );
 
   const listBlockIdToIdx_ = useMemo(
@@ -7092,10 +7139,12 @@ function ReactEditor({
         <SelectedEditorsContext.Provider value={selectedEditors}>
           <SelectedBlocksContext.Provider value={selectedBlocks}>
             <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
-              <ReactEditorValue
-                queueCommand={queueCommand}
-                value={editorCtrl.current.value}
-              />
+              <QueueCommandContext.Provider
+                // eslint-disable-next-line react-hooks/exhaustive-deps
+                value={useCallback(queueCommand, [])}
+              >
+                <ReactEditorValue value={editorCtrl.current.value} />
+              </QueueCommandContext.Provider>
             </NumberedListIndicesContext.Provider>
           </SelectedBlocksContext.Provider>
         </SelectedEditorsContext.Provider>
