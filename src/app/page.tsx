@@ -162,6 +162,7 @@ enum ParagraphStyleType {
   Heading2 = 'Heading 2',
   Heading1 = 'Heading 1',
   Heading3 = 'Heading 3',
+  Heading4 = 'Heading 4',
   BlockQuote = 'BlockQuote',
   BulletList = 'Bullet List',
   NumberedList = 'Numbered List',
@@ -193,6 +194,9 @@ interface Heading1ParagraphStyle extends ParagraphStyleBase {
 interface Heading3ParagraphStyle extends ParagraphStyleBase {
   type: ParagraphStyleType.Heading3;
 }
+interface Heading4ParagraphStyle extends ParagraphStyleBase {
+  type: ParagraphStyleType.Heading4;
+}
 interface BlockQuote extends ParagraphStyleBase {
   type: ParagraphStyleType.BlockQuote;
 }
@@ -210,6 +214,7 @@ type ParagraphStyle =
   | Heading2ParagraphStyle
   | Heading1ParagraphStyle
   | Heading3ParagraphStyle
+  | Heading4ParagraphStyle
   | BlockQuote
   | BulletListParagraphStyle
   | NumberedListParagraphStyle;
@@ -251,10 +256,10 @@ type BlockNode = ImageNode | TableNode | CodeBlockNode | ParagraphNode;
 type InlineNode = TextNode;
 
 enum PushStateAction {
-  Unique,
-  Insert,
-  Delete,
-  Selection,
+  Unique = 'Unique',
+  Insert = 'Insert',
+  Delete = 'Delete',
+  Selection = 'Selection',
 }
 
 interface EditorController {
@@ -319,6 +324,17 @@ function makeHeading1Paragraph(
   );
 }
 function makeHeading3Paragraph(
+  children: InlineNode[],
+  id: string,
+  styleBase?: ParagraphStyleBase,
+): ParagraphNode {
+  return makeParagraph(
+    children,
+    { type: ParagraphStyleType.Heading3, ...styleBase },
+    id,
+  );
+}
+function makeHeading4Paragraph(
   children: InlineNode[],
   id: string,
   styleBase?: ParagraphStyleBase,
@@ -657,7 +673,7 @@ const prismTheme: PrismTheme = {
   ],
 };
 
-const useIsomorphicLayoutEffect =
+let useIsomorphicLayoutEffect =
   typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface ReactCodeBlockNodeProps {
@@ -694,7 +710,7 @@ function ReactCodeBlockNode_({
           blockId: value.id,
         },
       },
-      inputType: 'x_ReplaceBlock_MergeHistory',
+      inputType: 'x_updateCodeBlock_Code',
       data: {
         type: DataTransferType.Rich,
         value: makeEditorValue(
@@ -729,7 +745,11 @@ function ReactCodeBlockNode_({
         }
       >
         {({ className, style, tokens, getLineProps, getTokenProps }) => (
-          <table style={omit(style, ['backgroundColor'])} aria-hidden="true">
+          <table
+            style={omit(style, ['backgroundColor'])}
+            className="code-block-container__table"
+            aria-hidden="true"
+          >
             <tbody>
               {tokens.map((line, i) => (
                 <tr key={i}>
@@ -750,7 +770,7 @@ function ReactCodeBlockNode_({
         )}
       </Highlight>
     ) : (
-      <table aria-hidden="true">
+      <table className="code-block-container__table" aria-hidden="true">
         <tbody>
           {value.code.split('\n').map((lineCode, i) => (
             <tr key={i}>
@@ -779,7 +799,7 @@ function ReactCodeBlockNode_({
           blockId: value.id,
         },
       },
-      inputType: 'x_ReplaceBlock_MergeHistory',
+      inputType: 'x_updateCodeBlock_Lang',
       data: {
         type: DataTransferType.Rich,
         value: makeEditorValue([makeCodeBlock(value.code, lang, value.id)], ''),
@@ -873,6 +893,7 @@ function ReactCodeBlockNode_({
           <select
             className="code-block-container__lang-select-container__select"
             value={value.language}
+            tabIndex={-1}
             onChange={(event) => {
               switchLang(event.target.value as CodeBlockLanguage);
             }}
@@ -944,10 +965,6 @@ function ReactCodeBlockNode_({
                 editor.onDidContentSizeChange(updateHeight);
                 editor.onDidFocusEditorText(() => {
                   setIsFocused(true);
-                  queueCommand({
-                    type: CommandType.Selection,
-                    selection: null,
-                  });
                 });
                 editor.onDidBlurEditorText(() => {
                   setIsFocused(false);
@@ -1229,6 +1246,20 @@ function ReactParagraphNode_(props: {
         >
           {children}
         </h3>
+      );
+    }
+    case ParagraphStyleType.Heading4: {
+      return (
+        <h4
+          className="paragraph-container--with-toplevel-padding"
+          style={style}
+          data-family={EditorFamilyType.Block}
+          data-type={BlockNodeType.Paragraph}
+          data-empty-paragraph={isEmpty}
+          data-id={value.id}
+        >
+          {children}
+        </h4>
       );
     }
     case ParagraphStyleType.BlockQuote: {
@@ -1626,7 +1657,7 @@ function closest(node: Node, selectors: string): Element | null {
 type Selection = BlockSelection | TableSelection;
 
 enum FindPointResultType {
-  Block,
+  Block = 'Block',
 }
 type FindPointResult = {
   type: FindPointResultType.Block;
@@ -2011,9 +2042,9 @@ function findSelection(
 }
 
 enum Direction {
-  Forwards,
-  Collapsed,
-  Backwards,
+  Forwards = 'Forwards',
+  Collapsed = 'Collapsed',
+  Backwards= 'Backwards',
 }
 
 function getDirection(value: EditorValue, selection: Selection): Direction {
@@ -2207,9 +2238,9 @@ function fixParagraph(paragraph: ParagraphNode): ParagraphNode {
 }
 
 enum ContainType {
-  Separate,
-  SameLevel,
-  Contained,
+  Separate = 'Separate',
+  SameLevel = 'SameLevel',
+  Contained = 'Contained',
 }
 type ContainData =
   | { type: ContainType.SameLevel; editor: EditorValue }
@@ -3708,8 +3739,8 @@ function extractText(value: EditorValue): string {
 }
 
 enum DataTransferType {
-  Plain,
-  Rich,
+  Plain = 'Plain',
+  Rich = 'Rich',
 }
 interface PlainDataTransfer {
   type: DataTransferType.Plain;
@@ -3799,6 +3830,7 @@ const BACKSPACE = 8;
 const ONE = 49;
 const TWO = 50;
 const THREE = 51;
+const FOUR = 52;
 const EIGHT = 56;
 const NINE = 57;
 const B = 66;
@@ -3869,6 +3901,7 @@ const isSubscript = allPass([
 const isHeading1 = allPass([hasCommandOptionKey, hasKeyCode(ONE)]);
 const isHeading2 = allPass([hasCommandOptionKey, hasKeyCode(TWO)]);
 const isHeading3 = allPass([hasCommandOptionKey, hasKeyCode(THREE)]);
+const isHeading4 = allPass([hasCommandOptionKey, hasKeyCode(FOUR)]);
 const isBlockQuote = allPass([
   hasCommandModifier,
   not(hasShiftKey),
@@ -4440,15 +4473,15 @@ function scrollIntoView(
 }
 
 enum CommandType {
-  Input,
-  InlineFormat,
-  BlockFormat,
-  ClearFormat,
-  ReplaceBlock,
-  Undo,
-  Redo,
-  DeleteBackwardKey,
-  Selection,
+  Input = 'Input',
+  InlineFormat = 'InlineFormat',
+  BlockFormat = 'BlockFormat',
+  ClearFormat = 'ClearFormat',
+  ReplaceBlock = 'ReplaceBlock',
+  Undo = 'Undo',
+  Redo = 'Redo',
+  DeleteBackwardKey = 'DeleteBackwardKey',
+  Selection = 'Selection',
 }
 type Command =
   | {
@@ -4484,6 +4517,7 @@ type Command =
   | {
       type: CommandType.Selection;
       selection: Selection | null;
+      doNotUpdateSelection?: boolean;
       origin?: string;
     };
 const cmds = {
@@ -4679,7 +4713,7 @@ const cmds = {
           c.selection!,
           (style) => style.type === ParagraphStyleType.Heading3,
         ),
-      Icon: Heading2Icon,
+      Icon: Heading3Icon,
     },
     getCmds: (selection) => [
       {
@@ -4691,6 +4725,31 @@ const cmds = {
           type: active
             ? ParagraphStyleType.Default
             : ParagraphStyleType.Heading3,
+        }),
+      },
+    ],
+  },
+  'heading 4': {
+    isKey: isHeading4,
+    icon: {
+      isActive: (c) =>
+        isParagraphStyleActive(
+          c.value,
+          c.selection!,
+          (style) => style.type === ParagraphStyleType.Heading4,
+        ),
+      Icon: Heading4Icon,
+    },
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: (style) => style.type === ParagraphStyleType.Heading4,
+        transform: (style, active) => ({
+          ...style,
+          type: active
+            ? ParagraphStyleType.Default
+            : ParagraphStyleType.Heading4,
         }),
       },
     ],
@@ -5473,10 +5532,12 @@ function convertFromElToEditorValue(
           const n = Number(blockEl.tagName.toLowerCase()[1]);
           if (n === 1) {
             return makeHeading1Paragraph([], makeId(), paraStyleBase);
-          } else if (n === 2 || n === 3) {
+          } else if (n === 2) {
             return makeHeading2Paragraph([], makeId(), paraStyleBase);
-          } else if (n === 4 || n === 5 || n === 6) {
+          } else if (n === 3) {
             return makeHeading3Paragraph([], makeId(), paraStyleBase);
+          } else if (n === 4 || n === 5 || n === 6) {
+            return makeHeading4Paragraph([], makeId(), paraStyleBase);
           }
         }
         if (blockEl.tagName.toLowerCase().startsWith('blockquote')) {
@@ -5922,10 +5983,10 @@ function ReactEditor({
     const queue = inputQueueRef.current;
     inputQueueRef.current = [];
     let newEditorCtrl = editorCtrl.current;
-    console.log(queue);
+    console.log('flushing input queue', ...queue);
     let dropValue: EditorValue | null = null;
     let ignoreNext: boolean = false;
-    let ignoreSelectionN = 0;
+    let setNewSelection = true; // TODO fix.
     function processCommand(command: Command, i: number | null): void {
       if (ignoreNext) {
         ignoreNext = false;
@@ -5933,13 +5994,21 @@ function ReactEditor({
       }
       const originalSelection = command.selection;
       if (!originalSelection) {
-        newEditorCtrl = pushState(
-          newEditorCtrl,
-          newEditorCtrl.value,
-          null,
-          {},
-          PushStateAction.Selection,
-        );
+        if (command.type !== CommandType.Selection) {
+          throw new Error('expected selection');
+        }
+        if (i === queue.length - 1 && command.doNotUpdateSelection) {
+          setNewSelection = false;
+        }
+        if (newEditorCtrl.selection !== null) {
+          newEditorCtrl = pushState(
+            newEditorCtrl,
+            newEditorCtrl.value,
+            null,
+            {},
+            PushStateAction.Selection,
+          );
+        }
         return;
       }
       let inputSelection = mapSelectionFns.reduce(
@@ -6000,7 +6069,8 @@ function ReactEditor({
           case 'insertText':
           case 'insertFromPaste':
           case 'insertFromDrop':
-          case 'x_ReplaceBlock_MergeHistory': {
+          case 'x_updateCodeBlock_Code':
+          case 'x_updateCodeBlock_Lang': {
             let action: PushStateAction | string;
             if (
               inputType === 'insertReplacementText' ||
@@ -6009,11 +6079,15 @@ function ReactEditor({
               inputType === 'insertFromDrop' ||
               (inputType === 'insertText' &&
                 data?.type === DataTransferType.Plain &&
-                data.text.includes('\n'))
+                data.text.includes('\n')) ||
+              inputType === 'x_updateCodeBlock_Lang'
             ) {
               action = PushStateAction.Unique;
-            } else if (inputType === 'x_ReplaceBlock_MergeHistory') {
-              action = `x_ReplaceBlock_MergeHistory_${
+            } else if (inputType === 'x_updateCodeBlock_Code') {
+              if (i === queue.length - 1) {
+                setNewSelection = false;
+              }
+              action = `x_updateCodeBlock_Code${
                 (data as RichDataTransfer).value.blocks[0].id
               }`;
             } else {
@@ -6058,7 +6132,7 @@ function ReactEditor({
             newEditorCtrl = pushState(
               newEditorCtrl,
               newValue,
-              inputType === 'x_ReplaceBlock_MergeHistory' ? null : newSelection,
+              newSelection,
               newTextStyle,
               action,
               mergeHistory,
@@ -6164,12 +6238,7 @@ function ReactEditor({
           command.condition,
           command.transform,
         );
-        let newValue = newEditorCtrl.value;
-        if (isCollapsed(inputSelection)) {
-          ignoreSelectionN++;
-        } else {
-          newValue = edit.value;
-        }
+        let newValue = edit.value;
         let newTextStyle = edit.textStyle;
         newEditorCtrl = pushState(
           newEditorCtrl,
@@ -6420,23 +6489,31 @@ function ReactEditor({
           }
         }
       } else if (command.type === CommandType.Selection) {
-        newEditorCtrl = pushState(
-          newEditorCtrl,
-          newEditorCtrl.value,
-          inputSelection,
-          newEditorCtrl.textStyle,
-          PushStateAction.Selection,
-        );
+        if (command.doNotUpdateSelection && i === queue.length - 1) {
+          setNewSelection = false;
+        }
+        if (
+          JSON.stringify(newEditorCtrl.selection) !==
+          JSON.stringify(inputSelection)
+        ) {
+          newEditorCtrl = pushState(
+            newEditorCtrl,
+            newEditorCtrl.value,
+            inputSelection,
+            newEditorCtrl.textStyle,
+            PushStateAction.Selection,
+          );
+        }
       }
     }
     for (let i = 0; i < queue.length; i++) {
       processCommand(queue[i], i);
     }
-    if (ignoreSelectionN < queue.length) {
+    if (setNewSelection) {
       newDomSelectionRef.current = newEditorCtrl.selection;
-      if (!newEditorCtrl.selection) {
-        editorRef.current!.blur();
-      }
+    }
+    if (!newEditorCtrl.selection) {
+      editorRef.current!.blur();
     }
     if (editorCtrl.current !== newEditorCtrl) {
       editorCtrl.current = newEditorCtrl;
@@ -6687,6 +6764,38 @@ function ReactEditor({
 
     const nativeSelection = window.getSelection()!;
 
+    if (
+      document.activeElement &&
+      editorRef.current!.contains(document.activeElement) &&
+      closest(nativeSelection.anchorNode!, '.monaco-editor')
+    ) {
+      const blockId = closest(
+        nativeSelection.anchorNode!,
+        `[data-type="${BlockNodeType.Code}"]`,
+      )!.getAttribute('data-id')!;
+      const editorId = closest(
+        nativeSelection.anchorNode!,
+        `[data-family="${EditorFamilyType.Editor}"]`,
+      )!.getAttribute('data-id')!;
+      queueCommand({
+        type: CommandType.Selection,
+        selection: {
+          type: SelectionType.Block,
+          editorId,
+          start: {
+            type: BlockSelectionPointType.OtherBlock,
+            blockId,
+          },
+          end: {
+            type: BlockSelectionPointType.OtherBlock,
+            blockId,
+          },
+        },
+        doNotUpdateSelection: true,
+      });
+      return;
+    }
+
     if (!isFocused() || nativeSelection.rangeCount === 0) {
       queueCommand({
         type: CommandType.Selection,
@@ -6736,27 +6845,23 @@ function ReactEditor({
 
   function copySelection(value: EditorValue, selection: Selection): void {
     const curValue = extractSelection(value, selection);
+    useIsomorphicLayoutEffect = useEffect;
+    const htmlText = renderToStaticMarkup(
+      <>
+        <span data-matita={JSON.stringify(curValue)} />
+        <NumberedListIndicesContext.Provider value={getListBlockIdToIdx(value)}>
+          <ReactEditorValue value={curValue} />
+        </NumberedListIndicesContext.Provider>
+      </>,
+    );
+    useIsomorphicLayoutEffect = useLayoutEffect;
     navigator.clipboard
       .write([
         new ClipboardItem({
           'text/plain': new Blob([extractText(curValue)], {
             type: 'text/plain',
           }),
-          'text/html': new Blob(
-            [
-              renderToStaticMarkup(
-                <>
-                  <span data-matita={JSON.stringify(curValue)} />
-                  <NumberedListIndicesContext.Provider
-                    value={getListBlockIdToIdx(value)}
-                  >
-                    <ReactEditorValue value={curValue} />
-                  </NumberedListIndicesContext.Provider>
-                </>,
-              ),
-            ],
-            { type: 'text/html' },
-          ),
+          'text/html': new Blob([htmlText], { type: 'text/html' }),
         }),
       ])
       .catch((error) => {
@@ -6812,6 +6917,17 @@ function ReactEditor({
   useEffect(() => {
     const editorElement = editorRef.current!;
     window.document.addEventListener('selectionchange', onHTMLSelectionChange);
+    const stfuMonacoForBlockingScroll = (event: TouchEvent): void => {
+      if (!(event.target instanceof HTMLElement)) {
+        return;
+      }
+      if (closest(event.target, '.code-block-container')) {
+        event.stopImmediatePropagation();
+      }
+    };
+    window.addEventListener('touchstart', stfuMonacoForBlockingScroll, true);
+    window.addEventListener('touchmove', stfuMonacoForBlockingScroll, true);
+    window.addEventListener('touchend', stfuMonacoForBlockingScroll, true);
     editorElement.addEventListener('beforeinput', onBeforeInput);
     editorElement.addEventListener('copy', onCopy);
     editorElement.addEventListener('keydown', onKeyDown);
@@ -6820,6 +6936,17 @@ function ReactEditor({
         'selectionchange',
         onHTMLSelectionChange,
       );
+      window.removeEventListener(
+        'touchstart',
+        stfuMonacoForBlockingScroll,
+        true,
+      );
+      window.removeEventListener(
+        'touchmove',
+        stfuMonacoForBlockingScroll,
+        true,
+      );
+      window.removeEventListener('touchend', stfuMonacoForBlockingScroll, true);
       editorElement.removeEventListener('beforeinput', onBeforeInput);
       editorElement.removeEventListener('copy', onCopy);
       editorElement.removeEventListener('keydown', onKeyDown);
@@ -7084,69 +7211,78 @@ function ReactEditor({
   const placeholderRef = useRef<HTMLDivElement | null>(null);
   return (
     <>
-      <div className="toolbar" onMouseDown={onEditorToolbarMouseDown}>
-        {Object.entries(cmds)
-          .filter(
-            (
-              a,
-            ): a is [
-              string,
-              Extract<(typeof cmds)[keyof typeof cmds], { icon: object }>,
-            ] => 'icon' in a[1] && a[1].icon !== undefined,
-          )
-          .map(([name, cmd]) => {
-            const isActive = editorCtrl.current.selection
-              ? cmd.icon.isActive(editorCtrl.current)
-              : false;
-            const Icon = cmd.icon.Icon;
-            const handle = () => {
-              if (editorCtrl.current.selection) {
-                cmd
-                  .getCmds(
-                    editorCtrl.current.selection,
-                    editorCtrl.current.makeId,
-                  )
-                  .forEach((command) => {
-                    queueCommand(command);
-                  });
-              }
-            };
-            return (
-              <Tooltip info={name} key={name}>
-                {({ focused }) => (
-                  <Icon
-                    onMouseDown={handle}
-                    isActive={isActive}
-                    isFocused={focused}
-                  />
-                )}
-              </Tooltip>
-            );
-          })}
-      </div>
       <div
-        contentEditable={isClient}
-        suppressContentEditableWarning
-        ref={editorRef}
-        className="editor"
+        className="toolbar page__inner-container"
+        onMouseDown={onEditorToolbarMouseDown}
       >
-        {isClient && hasPlaceholder && (
-          <div className="editor__placeholder" ref={placeholderRef}>
-            {placeholder}
+        <div className="page__inner">
+          {Object.entries(cmds)
+            .filter(
+              (
+                a,
+              ): a is [
+                string,
+                Extract<(typeof cmds)[keyof typeof cmds], { icon: object }>,
+              ] => 'icon' in a[1] && a[1].icon !== undefined,
+            )
+            .map(([name, cmd]) => {
+              const isActive = editorCtrl.current.selection
+                ? cmd.icon.isActive(editorCtrl.current)
+                : false;
+              const Icon = cmd.icon.Icon;
+              const handle = () => {
+                if (editorCtrl.current.selection) {
+                  cmd
+                    .getCmds(
+                      editorCtrl.current.selection,
+                      editorCtrl.current.makeId,
+                    )
+                    .forEach((command) => {
+                      queueCommand(command);
+                    });
+                }
+              };
+              return (
+                <Tooltip info={name} key={name}>
+                  {({ focused }) => (
+                    <Icon
+                      onMouseDown={handle}
+                      isActive={isActive}
+                      isFocused={focused}
+                    />
+                  )}
+                </Tooltip>
+              );
+            })}
+        </div>
+      </div>
+      <div className="page__inner-container">
+        <div className="page__inner">
+          <div
+            contentEditable={isClient}
+            suppressContentEditableWarning
+            ref={editorRef}
+            className="editor"
+          >
+            {isClient && hasPlaceholder && (
+              <div className="editor__placeholder" ref={placeholderRef}>
+                {placeholder}
+              </div>
+            )}
+            <SelectedEditorsContext.Provider value={selectedEditors}>
+              <SelectedBlocksContext.Provider value={selectedBlocks}>
+                <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
+                  <QueueCommandContext.Provider
+                    // eslint-disable-next-line react-hooks/exhaustive-deps
+                    value={useCallback(queueCommand, [])}
+                  >
+                    <ReactEditorValue value={editorCtrl.current.value} />
+                  </QueueCommandContext.Provider>
+                </NumberedListIndicesContext.Provider>
+              </SelectedBlocksContext.Provider>
+            </SelectedEditorsContext.Provider>
           </div>
-        )}
-        <SelectedEditorsContext.Provider value={selectedEditors}>
-          <SelectedBlocksContext.Provider value={selectedBlocks}>
-            <NumberedListIndicesContext.Provider value={listBlockIdToIdx}>
-              <QueueCommandContext.Provider
-                // eslint-disable-next-line react-hooks/exhaustive-deps
-                value={useCallback(queueCommand, [])}
-              >
-                <ReactEditorValue value={editorCtrl.current.value} />
-              </QueueCommandContext.Provider>
-            </NumberedListIndicesContext.Provider>
-          </SelectedBlocksContext.Provider>
-        </SelectedEditorsContext.Provider>
+        </div>
       </div>
     </>
   );
@@ -7294,10 +7430,10 @@ function Heading1Icon(props: ToolbarIconProps): JSX.Element {
       version="1.1"
       width="12"
       height="14"
-      viewBox="0 0 448 512"
+      viewBox="0 0 384 512"
       {...props}
     >
-      <path d="M0 64C0 46.3 14.3 32 32 32H80h48c17.7 0 32 14.3 32 32s-14.3 32-32 32H112V208H336V96H320c-17.7 0-32-14.3-32-32s14.3-32 32-32h48 48c17.7 0 32 14.3 32 32s-14.3 32-32 32H400V240 416h16c17.7 0 32 14.3 32 32s-14.3 32-32 32H368 320c-17.7 0-32-14.3-32-32s14.3-32 32-32h16V272H112V416h16c17.7 0 32 14.3 32 32s-14.3 32-32 32H80 32c-17.7 0-32-14.3-32-32s14.3-32 32-32H48V240 96H32C14.3 96 0 81.7 0 64z" />
+      <path d="M32 32C14.3 32 0 46.3 0 64S14.3 96 32 96H160V448c0 17.7 14.3 32 32 32s32-14.3 32-32V96H352c17.7 0 32-14.3 32-32s-14.3-32-32-32H192 32z" />
     </ToolbarIcon>
   );
 }
@@ -7308,10 +7444,54 @@ function Heading2Icon(props: ToolbarIconProps): JSX.Element {
       version="1.1"
       width="12"
       height="14"
-      viewBox="0 0 384 512"
+      viewBox="0 0 16 16"
+      style={{
+        width: '1.35em',
+        height: '1.35em',
+        paddingTop: '.3em',
+      }}
       {...props}
     >
-      <path d="M32 32C14.3 32 0 46.3 0 64S14.3 96 32 96H160V448c0 17.7 14.3 32 32 32s32-14.3 32-32V96H352c17.7 0 32-14.3 32-32s-14.3-32-32-32H192 32z" />
+      <path d="M8.637 13V3.669H7.379V7.62H2.758V3.67H1.5V13h1.258V8.728h4.62V13h1.259zm5.329 0V3.669h-1.244L10.5 5.316v1.265l2.16-1.565h.062V13h1.244z" />
+      <path d="M0 64C0 46.3 14.3 32 32 32H80h48c17.7 0 32 14.3 32 32s-14.3 32-32 32H112V208H336V96H320c-17.7 0-32-14.3-32-32s14.3-32 32-32h48 48c17.7 0 32 14.3 32 32s-14.3 32-32 32H400V240 416h16c17.7 0 32 14.3 32 32s-14.3 32-32 32H368 320c-17.7 0-32-14.3-32-32s14.3-32 32-32h16V272H112V416h16c17.7 0 32 14.3 32 32s-14.3 32-32 32H80 32c-17.7 0-32-14.3-32-32s14.3-32 32-32H48V240 96H32C14.3 96 0 81.7 0 64z" />
+    </ToolbarIcon>
+  );
+}
+
+function Heading3Icon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon
+      version="1.1"
+      width="12"
+      height="14"
+      viewBox="0 0 16 16"
+      style={{
+        width: '1.35em',
+        height: '1.35em',
+        paddingTop: '.3em',
+      }}
+      {...props}
+    >
+      <path d="M7.638 13V3.669H6.38V7.62H1.759V3.67H.5V13h1.258V8.728h4.62V13h1.259zm3.022-6.733v-.048c0-.889.63-1.668 1.716-1.668.957 0 1.675.608 1.675 1.572 0 .855-.554 1.504-1.067 2.085l-3.513 3.999V13H15.5v-1.094h-4.245v-.075l2.481-2.844c.875-.998 1.586-1.784 1.586-2.953 0-1.463-1.155-2.556-2.919-2.556-1.941 0-2.966 1.326-2.966 2.74v.049h1.223z" />
+    </ToolbarIcon>
+  );
+}
+
+function Heading4Icon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon
+      version="1.1"
+      width="12"
+      height="14"
+      viewBox="0 0 16 16"
+      style={{
+        width: '1.35em',
+        height: '1.35em',
+        paddingTop: '.3em',
+      }}
+      {...props}
+    >
+      <path d="M7.637 13V3.669H6.379V7.62H1.758V3.67H.5V13h1.258V8.728h4.62V13h1.259zm3.625-4.272h1.018c1.142 0 1.935.67 1.949 1.674.013 1.005-.78 1.737-2.01 1.73-1.08-.007-1.853-.588-1.935-1.32H9.108c.069 1.327 1.224 2.386 3.083 2.386 1.935 0 3.343-1.155 3.309-2.789-.027-1.51-1.251-2.16-2.037-2.249v-.068c.704-.123 1.764-.91 1.723-2.229-.035-1.353-1.176-2.4-2.954-2.385-1.873.006-2.857 1.162-2.898 2.358h1.196c.062-.69.711-1.299 1.696-1.299.998 0 1.695.622 1.695 1.525.007.922-.718 1.592-1.695 1.592h-.964v1.074z" />
     </ToolbarIcon>
   );
 }
@@ -7401,15 +7581,13 @@ export default function Home() {
       {preloadComponents.map((PC, i) => (
         <PC key={i} />
       ))}
-      <div className="page__inner">
-        <main className="editor-wrapper">
-          <ReactEditor
-            placeholder="Type here..."
-            initialValue={require('./initialState.json')}
-            makeId={id}
-          />
-        </main>
-      </div>
+      <main className="editor-wrapper">
+        <ReactEditor
+          placeholder="Type here..."
+          initialValue={require('./initialState.json')}
+          makeId={id}
+        />
+      </main>
     </div>
   );
 }
