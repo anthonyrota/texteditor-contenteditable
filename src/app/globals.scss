@@ -379,6 +379,10 @@ i {
     background-color: transparent !important;
   }
 
+  .monaco-editor .overflow-guard {
+    overflow: visible;
+  }
+
   &__monaco--not-focused .monaco-editor .selected-text {
     background-color: transparent !important;
   }

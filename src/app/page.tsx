@@ -3828,6 +3828,7 @@ function hasKeyCode(
 }
 
 const BACKSPACE = 8;
+const SPACE = 32;
 const ONE = 49;
 const TWO = 50;
 const THREE = 51;
@@ -3864,6 +3865,7 @@ const isDeleteBackward = anyPass([
   ]),
   allPass([hasControlKey, not(hasShiftKey), hasKeyCode(H)]),
 ]);
+const isSpace = allPass([hasNoModifiers, hasKeyCode(SPACE)]);
 const isUndo = anyPass([
   allPass([hasCommandModifier, not(hasShiftKey), hasKeyCode(Z)]),
   allPass([hasCommandModifier, hasShiftKey, hasKeyCode(Y)]),
@@ -4482,6 +4484,7 @@ enum CommandType {
   Redo = 'Redo',
   DeleteBackwardKey = 'DeleteBackwardKey',
   Selection = 'Selection',
+  SpaceKey = 'Space',
 }
 type Command =
   | {
@@ -4510,7 +4513,8 @@ type Command =
         | CommandType.ClearFormat
         | CommandType.Redo
         | CommandType.Undo
-        | CommandType.DeleteBackwardKey;
+        | CommandType.DeleteBackwardKey
+        | CommandType.SpaceKey;
       selection: Selection;
       origin?: string;
     }
@@ -4933,6 +4937,10 @@ const cmds = {
   },
   undo: {
     isKey: isUndo,
+    icon: {
+      isActive: () => false,
+      Icon: UndoIcon,
+    },
     getCmds: (selection) => [
       {
         type: CommandType.Undo,
@@ -4942,6 +4950,10 @@ const cmds = {
   },
   redo: {
     isKey: isRedo,
+    icon: {
+      isActive: () => false,
+      Icon: RedoIcon,
+    },
     getCmds: (selection) => [
       {
         type: CommandType.Redo,
@@ -4954,6 +4966,15 @@ const cmds = {
     getCmds: (selection) => [
       {
         type: CommandType.DeleteBackwardKey,
+        selection,
+      },
+    ],
+  },
+  space: {
+    isKey: isSpace,
+    getCmds: (selection) => [
+      {
+        type: CommandType.SpaceKey,
         selection,
       },
     ],
@@ -6502,6 +6523,99 @@ function ReactEditor({
             }
           }
         }
+      } else if (command.type === CommandType.SpaceKey) {
+        if (!isCollapsed(inputSelection)) {
+          return;
+        }
+        const point = (inputSelection as BlockSelection).start;
+        if (
+          point.type !== BlockSelectionPointType.Paragraph ||
+          (point.offset !== 1 && point.offset !== 2)
+        ) {
+          return;
+        }
+        const res = walkEditorValues<boolean | undefined>(
+          editorCtrl.current.value,
+          (subValue, _data, _ids) => {
+            if (subValue.id !== inputSelection.editorId) {
+              return {
+                stop: false,
+                data: undefined,
+              };
+            }
+            const para = subValue.blocks.find(
+              (block) => block.id === point.blockId,
+            ) as ParagraphNode;
+            const { style } = para;
+            if (
+              style.type === ParagraphStyleType.Default &&
+              !style.hangingIndent &&
+              !style.indentLevel &&
+              para.children.length === 1 &&
+              ['*', '1.'].includes(para.children[0].text)
+            ) {
+              return {
+                stop: true,
+                data: true,
+                newValue: makeEditorValue(
+                  subValue.blocks.map((block) => {
+                    if (block.id === point.blockId) {
+                      return makeParagraph(
+                        [makeText('', newEditorCtrl.textStyle, makeId())],
+                        {
+                          ...(para.style as DefaultParagraphStyle),
+                          type:
+                            para.children[0].text === '*'
+                              ? ParagraphStyleType.BulletList
+                              : ParagraphStyleType.NumberedList,
+                          listId: makeId(),
+                        },
+                        para.id,
+                      );
+                    }
+                    return block;
+                  }),
+                  subValue.id,
+                ),
+              };
+            }
+            return {
+              stop: true,
+              data: undefined,
+            };
+          },
+          undefined,
+          true,
+        );
+        if (res.retValue) {
+          const newPoint: ParagraphPoint = {
+            type: BlockSelectionPointType.Paragraph,
+            blockId: point.blockId,
+            offset: 0,
+          };
+          const newSel: Selection = {
+            type: SelectionType.Block,
+            editorId: inputSelection.editorId,
+            start: newPoint,
+            end: newPoint,
+          };
+          newEditorCtrl = pushState(
+            newEditorCtrl,
+            res.mappedEditor,
+            newSel,
+            newEditorCtrl.textStyle,
+            PushStateAction.Unique,
+          );
+          if (i !== null && i < queue.length - 1) {
+            const next = queue[i + 1];
+            if (
+              next.type === CommandType.Input &&
+              next.inputType === 'insertText'
+            ) {
+              ignoreNext = true;
+            }
+          }
+        }
       } else if (command.type === CommandType.Selection) {
         if (command.doNotUpdateSelection && i === queue.length - 1) {
           setNewSelection = false;
@@ -6725,6 +6839,7 @@ function ReactEditor({
     function isBatch(cmd: Command): boolean {
       return (
         cmd.type === CommandType.DeleteBackwardKey ||
+        cmd.type === CommandType.SpaceKey ||
         (cmd.type === CommandType.InlineFormat &&
           (
             [
@@ -6745,12 +6860,17 @@ function ReactEditor({
         flushInputQueue();
         return;
       }
-      inputQueueRequestRef.current = requestAnimationFrame(flushInputQueue);
+      inputQueueRequestRef.current = window.setTimeout(
+        flushInputQueue,
+        1000 / 60,
+      );
     } else {
       const lastCommand =
         inputQueueRef.current[inputQueueRef.current.length - 1];
       if (isBatch(lastCommand)) {
-        cancelAnimationFrame(inputQueueRequestRef.current!);
+        if (inputQueueRequestRef.current !== null) {
+          window.clearTimeout(inputQueueRequestRef.current!);
+        }
         inputQueueRef.current.push(command);
         flushInputQueue();
         return;
@@ -6762,7 +6882,7 @@ function ReactEditor({
   useEffect(() => {
     return () => {
       if (inputQueueRequestRef.current !== null) {
-        clearTimeout(inputQueueRequestRef.current);
+        window.clearTimeout(inputQueueRequestRef.current);
       }
     };
   }, []);
@@ -6913,25 +7033,31 @@ function ReactEditor({
     if (!curSelection || !isFocused()) {
       return;
     }
+    const sel = findSelection(
+      editorCtrl.current.value,
+      curSelection.getRangeAt(0),
+      isSelectionBackwards(curSelection),
+    );
     const cmdKV = Object.entries(cmds);
     for (let i = 0; i < cmdKV.length; i++) {
       const [_name, cmd] = cmdKV[i];
       if (cmd.isKey(event)) {
-        if (cmd !== cmds['delete backward']) {
+        if (
+          cmd === cmds['delete backward']
+            ? sel.editorId === editorCtrl.current.value.id &&
+              isCollapsed(sel) &&
+              (sel as BlockSelection).start.type ===
+                BlockSelectionPointType.Paragraph &&
+              (sel as BlockSelection).start.blockId ===
+                editorCtrl.current.value.blocks[0].id &&
+              ((sel as BlockSelection).start as ParagraphPoint).offset === 0
+            : cmd !== cmds['space']
+        ) {
           event.preventDefault();
         }
-        cmd
-          .getCmds(
-            findSelection(
-              editorCtrl.current.value,
-              curSelection.getRangeAt(0),
-              isSelectionBackwards(curSelection),
-            ),
-            editorCtrl.current.makeId,
-          )
-          .forEach((command) => {
-            queueCommand(command);
-          });
+        cmd.getCmds(sel, editorCtrl.current.makeId).forEach((command) => {
+          queueCommand(command);
+        });
         break;
       }
     }
@@ -7582,6 +7708,34 @@ function NumberedListIcon(props: ToolbarIconProps): JSX.Element {
         <path d="M296 854 c-83 -26 -186 -152 -172 -210 10 -40 42 -64 84 -64 44 0 46 2 95 63 42 51 80 62 111 31 33 -33 20 -61 -86 -176 -57 -62 -124 -135 -150 -163 -26 -28 -50 -63 -53 -77 -9 -37 18 -84 56 -97 48 -17 351 -14 393 3 67 28 68 124 1 154 -14 7 -55 12 -90 12 -36 0 -65 3 -65 6 0 3 33 41 73 85 93 103 110 136 110 215 0 50 -6 72 -27 109 -34 58 -93 100 -157 114 -61 13 -62 13 -123 -5z" />
         <path d="M890 503 c-31 -11 -70 -58 -76 -90 -7 -40 8 -82 43 -115 l25 -23 508 -3 c556 -3 559 -3 597 54 11 17 18 45 17 72 -1 35 -7 50 -33 75 l-31 32 -518 2 c-284 1 -524 -1 -532 -4z" />
       </g>
+    </ToolbarIcon>
+  );
+}
+
+function UndoIcon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon
+      version="1.1"
+      width="12"
+      height="14"
+      viewBox="0 0 512 512"
+      {...props}
+    >
+      <path d="M212.333 224.333H12c-6.627 0-12-5.373-12-12V12C0 5.373 5.373 0 12 0h48c6.627 0 12 5.373 12 12v78.112C117.773 39.279 184.26 7.47 258.175 8.007c136.906.994 246.448 111.623 246.157 248.532C504.041 393.258 393.12 504 256.333 504c-64.089 0-122.496-24.313-166.51-64.215-5.099-4.622-5.334-12.554-.467-17.42l33.967-33.967c4.474-4.474 11.662-4.717 16.401-.525C170.76 415.336 211.58 432 256.333 432c97.268 0 176-78.716 176-176 0-97.267-78.716-176-176-176-58.496 0-110.28 28.476-142.274 72.333h98.274c6.627 0 12 5.373 12 12v48c0 6.627-5.373 12-12 12z" />
+    </ToolbarIcon>
+  );
+}
+
+function RedoIcon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon
+      version="1.1"
+      width="12"
+      height="14"
+      viewBox="0 0 512 512"
+      {...props}
+    >
+      <path d="M447.5 224H456c13.3 0 24-10.7 24-24V72c0-9.7-5.8-18.5-14.8-22.2s-19.3-1.7-26.2 5.2L397.4 96.6c-87.6-86.5-228.7-86.2-315.8 1c-87.5 87.5-87.5 229.3 0 316.8s229.3 87.5 316.8 0c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0c-62.5 62.5-163.8 62.5-226.3 0s-62.5-163.8 0-226.3c62.2-62.2 162.7-62.5 225.3-1L311 183c-6.9 6.9-8.9 17.2-5.2 26.2s12.5 14.8 22.2 14.8H447.5z" />
     </ToolbarIcon>
   );
 }
