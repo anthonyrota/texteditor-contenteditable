@@ -895,6 +895,7 @@ function ReactCodeBlockNode_({
             value={value.language}
             tabIndex={-1}
             onChange={(event) => {
+              event.preventDefault();
               switchLang(event.target.value as CodeBlockLanguage);
             }}
           >
@@ -2044,7 +2045,7 @@ function findSelection(
 enum Direction {
   Forwards = 'Forwards',
   Collapsed = 'Collapsed',
-  Backwards= 'Backwards',
+  Backwards = 'Backwards',
 }
 
 function getDirection(value: EditorValue, selection: Selection): Direction {
@@ -4319,7 +4320,6 @@ function scrollIntoView(
   selection: globalThis.Selection,
   scroller?: HTMLElement,
 ) {
-  if (Math.random() < 2) return;
   if (!selection.anchorNode) {
     return;
   }
@@ -4518,6 +4518,7 @@ type Command =
       type: CommandType.Selection;
       selection: Selection | null;
       doNotUpdateSelection?: boolean;
+      mergeLast?: boolean;
       origin?: string;
     };
 const cmds = {
@@ -5882,9 +5883,21 @@ function ReactEditor({
   const [_renderToggle, setRenderToggle] = useState(false);
 
   const updateSelection = (newSelection: Selection): void => {
-    editorRef.current!.focus();
+    let native = window.getSelection()!;
 
-    const native = window.getSelection()!;
+    if (
+      !document.activeElement ||
+      !(
+        document.activeElement &&
+        editorRef.current!.contains(document.activeElement) &&
+        native.anchorNode &&
+        closest(native.anchorNode, '.monaco-editor')
+      )
+    ) {
+      editorRef.current!.focus();
+      native = window.getSelection()!;
+    }
+
     const range = makeDOMRange(
       newSelection,
       editorCtrl.current.value,
@@ -5969,7 +5982,7 @@ function ReactEditor({
       textStyle: newTextStyle,
       undos,
       redos,
-      lastAction: action,
+      lastAction: merge ? curEditorCtrl.lastAction : action,
       makeId,
     };
   }
@@ -6007,6 +6020,7 @@ function ReactEditor({
             null,
             {},
             PushStateAction.Selection,
+            command.mergeLast,
           );
         }
         return;
@@ -6492,18 +6506,14 @@ function ReactEditor({
         if (command.doNotUpdateSelection && i === queue.length - 1) {
           setNewSelection = false;
         }
-        if (
-          JSON.stringify(newEditorCtrl.selection) !==
-          JSON.stringify(inputSelection)
-        ) {
-          newEditorCtrl = pushState(
-            newEditorCtrl,
-            newEditorCtrl.value,
-            inputSelection,
-            newEditorCtrl.textStyle,
-            PushStateAction.Selection,
-          );
-        }
+        newEditorCtrl = pushState(
+          newEditorCtrl,
+          newEditorCtrl.value,
+          inputSelection,
+          newEditorCtrl.textStyle,
+          PushStateAction.Selection,
+          command.mergeLast,
+        );
       }
     }
     for (let i = 0; i < queue.length; i++) {
@@ -6767,7 +6777,8 @@ function ReactEditor({
     if (
       document.activeElement &&
       editorRef.current!.contains(document.activeElement) &&
-      closest(nativeSelection.anchorNode!, '.monaco-editor')
+      nativeSelection.anchorNode &&
+      closest(nativeSelection.anchorNode, '.monaco-editor')
     ) {
       const blockId = closest(
         nativeSelection.anchorNode!,
@@ -6792,6 +6803,7 @@ function ReactEditor({
           },
         },
         doNotUpdateSelection: true,
+        mergeLast: true,
       });
       return;
     }
@@ -6832,11 +6844,22 @@ function ReactEditor({
       });
     }
 
-    const curSelection = findSelection(
-      editorCtrl.current.value,
-      nativeSelection.getRangeAt(0),
-      isSelectionBackwards(nativeSelection),
-    );
+    let curSelection: Selection;
+    try {
+      curSelection = findSelection(
+        editorCtrl.current.value,
+        nativeSelection.getRangeAt(0),
+        isSelectionBackwards(nativeSelection),
+      );
+    } catch (error) {
+      console.error(
+        'error finding selection',
+        document.activeElement,
+        nativeSelection.anchorNode,
+        nativeSelection.focusNode,
+      );
+      return;
+    }
     queueCommand({
       type: CommandType.Selection,
       selection: curSelection,

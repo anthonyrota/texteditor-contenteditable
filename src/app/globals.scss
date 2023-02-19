@@ -224,7 +224,6 @@ i {
 
 .toolbarIcon {
   vertical-align: middle;
-  cursor: pointer;
   fill: $text-color;
   display: inline-block;
   margin: 0;
@@ -284,7 +283,7 @@ i {
 }
 
 .editor .line-numbers::selection {
-  background-color: transparent;
+  background-color: transparent !important;
 }
 
 .editor .inline-text {
@@ -359,7 +358,7 @@ i {
   background-color: #ffffff;
 
   &::selection {
-    background-color: transparent;
+    background-color: transparent !important;
   }
 
   &--selected {
@@ -377,7 +376,7 @@ i {
   font-family: var(--code-font);
 
   .monaco-editor .inputarea::selection {
-    background-color: transparent;
+    background-color: transparent !important;
   }
 
   &__monaco--not-focused .monaco-editor .selected-text {
@@ -410,7 +409,7 @@ i {
     grid-template-areas: 'select';
     align-items: center;
 
-    select,
+    &__select,
     &::after {
       grid-area: select;
     }
@@ -424,7 +423,7 @@ i {
       width: 100%;
       font-family: inherit;
       font-size: inherit;
-      cursor: inherit;
+      cursor: default;
       line-height: inherit;
       padding: 0 0.5 * $spacing;
       padding-right: $spacing * 2;
@@ -432,7 +431,7 @@ i {
 
     &::selection,
     & *::selection {
-      background-color: transparent;
+      background-color: transparent !important;
     }
   }
 
@@ -455,7 +454,6 @@ i {
     &:hover {
       background-color: $accent-color;
     }
-    cursor: pointer;
     &[disabled] {
       cursor: not-allowed;
     }
@@ -622,7 +620,7 @@ i {
 
 .editor .code-block-container,
 .editor .img-container {
-  cursor: pointer;
+  cursor: default;
 }
 
 .editor .code-block-container,
@@ -746,7 +744,7 @@ i {
 
 .editor .block-table .block-table__td.not-selected::selection,
 .editor .block-table .block-table__td.not-selected *::selection {
-  background-color: transparent;
+  background-color: transparent !important;
 }
 
 .editor .inline-code {
