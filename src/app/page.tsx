@@ -658,7 +658,7 @@ const prismTheme: PrismTheme = {
 };
 
 const useIsomorphicLayoutEffect =
-  typeof window !== 'undefined' ? useEffect : useLayoutEffect;
+  typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 interface ReactCodeBlockNodeProps {
   value: CodeBlockNode;
@@ -6721,7 +6721,6 @@ function ReactEditor({
         type: CommandType.Selection,
         selection: curSelection,
       });
-      return;
     }
 
     const curSelection = findSelection(

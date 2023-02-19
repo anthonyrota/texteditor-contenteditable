@@ -4,6 +4,10 @@
   left: -99999px;
 }
 
+$main-color: rgb(172, 206, 247);
+$accent-color: rgb(199, 146, 234);
+$text-color: #444;
+
 html,
 body,
 div,
@@ -159,7 +163,7 @@ i {
 .tooltip__tooltip {
   position: absolute;
   z-index: 99;
-  background: #222;
+  background: $text-color;
   left: 50%;
   top: 100%;
   transform: translateX(-50%);
@@ -168,7 +172,7 @@ i {
 
 .tooltip__content {
   position: relative;
-  background: #222;
+  background: $text-color;
   color: #fff;
   display: block;
   font-size: 0.8em;
@@ -188,7 +192,7 @@ i {
   border-left: solid transparent 5px;
   border-right: solid transparent 5px;
   top: -5px;
-  border-bottom: solid #222 5px;
+  border-bottom: solid $text-color 5px;
 }
 
 .tooltip__gap {
@@ -210,7 +214,7 @@ i {
 .toolbarIcon {
   vertical-align: middle;
   cursor: pointer;
-  fill: #444;
+  fill: $text-color;
   display: inline-block;
   margin: 0 0.3em;
   padding: 0.4em;
@@ -238,7 +242,7 @@ i {
   -ms-text-size-adjust: 100%;
   -webkit-text-size-adjust: 100%;
   margin: 0;
-  color: #000;
+  color: $text-color;
   background-color: #ffffff;
   font-size: 1em;
   line-height: 1.5;
@@ -279,13 +283,13 @@ i {
 }
 
 .editor *::selection {
-  background-color: rgba(172, 206, 247, 0.99);
+  background-color: rgba($main-color, 0.99);
   color: inherit;
 }
 
 .editor a {
   background-color: transparent;
-  color: #0969da;
+  color: $accent-color;
   text-decoration: none;
 }
 
@@ -335,7 +339,7 @@ i {
 }
 
 @mixin block-outline($x: 0.35em) {
-  outline: rgb(199, 146, 234) solid $x;
+  outline: $main-color solid $x;
 }
 
 .editor .img {
@@ -374,7 +378,7 @@ i {
   &__lang-select-container {
     font-size: 1em;
     position: absolute;
-    background: #3884ff;
+    background: $accent-color;
     top: 0;
     border-radius: 0 0 4px 4px;
     font-size: 12px;
@@ -440,7 +444,7 @@ i {
     background: #000;
     color: #fff;
     &:hover {
-      background-color: #3884ff;
+      background-color: $accent-color;
     }
     cursor: pointer;
     &[disabled] {
@@ -519,7 +523,7 @@ i {
   height: 0.25em;
   padding: 0;
   margin: 1.5em 0;
-  background-color: #d0d7de;
+  background-color: $text-color;
   border: 0;
 }
 
@@ -616,7 +620,7 @@ i {
   margin: 0;
   padding: 0 1em;
   color: #57606a;
-  border-left: 0.2em solid #c792ea;
+  border-left: 0.2em solid $accent-color;
 }
 
 .editor ::placeholder {
@@ -707,11 +711,13 @@ i {
 .editor .block-table .block-table__th,
 .editor .block-table .block-table__td {
   padding: 0.6em 1em;
-  border: 1px solid #d0d7de;
+  border: 1px solid rgba($main-color, 0.4);
 }
 
+.editor .block-table .block-table__th.selected,
 .editor .block-table .block-table__td.selected {
-  background-color: rgb(172, 206, 247);
+  border: 1px solid darken($main-color, 4%);
+  background-color: $main-color;
 }
 
 .editor .block-table .block-table__tr {
@@ -719,7 +725,7 @@ i {
 }
 
 .editor .block-table__td:not(.selected) {
-  background-color: #f6f8fa;
+  background-color: rgba($main-color, 0.005);
 }
 
 .editor .block-table .block-table__td.not-selected::selection,
