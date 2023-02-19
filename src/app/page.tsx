@@ -179,7 +179,7 @@ const MAX_INDENT = 8;
 interface ParagraphStyleBase {
   align?: TextAlign;
   indentLevel?: number;
-  hangingIndent?: boolean;
+  hangingIndent?: true;
 }
 
 interface DefaultParagraphStyle extends ParagraphStyleBase {
@@ -4120,7 +4120,7 @@ function toggleInlineStyle(
   );
   return {
     value: edit.value,
-    textStyle: getSelectionTextStyle(editorCtrl.value, selection),
+    textStyle: getSelectionTextStyle(edit.value, selection),
   };
 }
 
@@ -4604,7 +4604,6 @@ const cmds = {
     isKey: isStrikethrough,
     icon: {
       isActive: (c) => !!c.textStyle.strikethrough,
-
       Icon: StrikethroughIcon,
     },
     getCmds: (selection) => [
@@ -4654,6 +4653,75 @@ const cmds = {
         transform: (style, active) => ({
           ...style,
           script: active ? undefined : TextScript.Subscript,
+        }),
+      },
+    ],
+  },
+  'align left': {
+    isKey: isAlignLeft,
+    icon: {
+      isActive: (c) =>
+        isParagraphStyleActive(
+          c.value,
+          c.selection!,
+          (style) => style.align === TextAlign.Left,
+        ),
+      Icon: AlignLeftIcon,
+    },
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: (style) => !style.align || style.align === TextAlign.Left,
+        transform: (style, active) => ({
+          ...style,
+          align: active ? undefined : style.align,
+        }),
+      },
+    ],
+  },
+  'align center': {
+    isKey: isAlignCenter,
+    icon: {
+      isActive: (c) =>
+        isParagraphStyleActive(
+          c.value,
+          c.selection!,
+          (style) => style.align === TextAlign.Center,
+        ),
+      Icon: AlignCenterIcon,
+    },
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: (style) => style.align === TextAlign.Center,
+        transform: (style, active) => ({
+          ...style,
+          align: active ? undefined : TextAlign.Center,
+        }),
+      },
+    ],
+  },
+  'align right': {
+    isKey: isAlignRight,
+    icon: {
+      isActive: (c) =>
+        isParagraphStyleActive(
+          c.value,
+          c.selection!,
+          (style) => style.align === TextAlign.Right,
+        ),
+      Icon: AlignRightIcon,
+    },
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: (style) => style.align === TextAlign.Right,
+        transform: (style, active) => ({
+          ...style,
+          align: active ? undefined : TextAlign.Right,
         }),
       },
     ],
@@ -4783,76 +4851,6 @@ const cmds = {
       },
     ],
   },
-  'align left': {
-    isKey: isAlignLeft,
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => !style.align || style.align === TextAlign.Left,
-        transform: (style, active) => ({
-          ...style,
-          align: active ? undefined : style.align,
-        }),
-      },
-    ],
-  },
-  'align center': {
-    isKey: isAlignCenter,
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => style.align === TextAlign.Center,
-        transform: (style, active) => ({
-          ...style,
-          align: active ? undefined : TextAlign.Center,
-        }),
-      },
-    ],
-  },
-  'align right': {
-    isKey: isAlignRight,
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => style.align === TextAlign.Right,
-        transform: (style, active) => ({
-          ...style,
-          align: active ? undefined : TextAlign.Right,
-        }),
-      },
-    ],
-  },
-  indent: {
-    isKey: isIndent,
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: () => false,
-        transform: (style) => ({
-          ...style,
-          indentLevel: Math.min((style.indentLevel || 0) + 1, MAX_INDENT),
-        }),
-      },
-    ],
-  },
-  outdent: {
-    isKey: isOutdent,
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: () => false,
-        transform: (style) => ({
-          ...style,
-          indentLevel: style.indentLevel ? style.indentLevel - 1 : undefined,
-        }),
-      },
-    ],
-  },
   'bullet list': {
     isKey: isBulletList,
     icon: {
@@ -4924,6 +4922,42 @@ const cmds = {
         },
       ];
     },
+  },
+  outdent: {
+    isKey: isOutdent,
+    icon: {
+      isActive: () => false,
+      Icon: DedentIcon,
+    },
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: () => false,
+        transform: (style) => ({
+          ...style,
+          indentLevel: style.indentLevel ? style.indentLevel - 1 : undefined,
+        }),
+      },
+    ],
+  },
+  indent: {
+    isKey: isIndent,
+    icon: {
+      isActive: () => false,
+      Icon: IndentIcon,
+    },
+    getCmds: (selection) => [
+      {
+        type: CommandType.BlockFormat,
+        selection,
+        condition: () => false,
+        transform: (style) => ({
+          ...style,
+          indentLevel: Math.min((style.indentLevel || 0) + 1, MAX_INDENT),
+        }),
+      },
+    ],
   },
   'clear format': {
     isKey: isClearFormatting,
@@ -6127,7 +6161,7 @@ function ReactEditor({
               newEditorCtrl,
               edit.value,
               newSelection,
-              getSelectionTextStyle(newEditorCtrl.value, newSelection),
+              getSelectionTextStyle(edit.value, newSelection),
               action,
             );
             mapSelectionFns.push(edit.mapSelection);
@@ -6640,8 +6674,8 @@ function ReactEditor({
               selection: originalSelection,
               data: {
                 type: DataTransferType.Plain,
-                text: ' '
-              }
+                text: ' ',
+              },
             },
             null,
           );
@@ -6670,7 +6704,7 @@ function ReactEditor({
           newEditorCtrl,
           newEditorCtrl.value,
           inputSelection,
-          newEditorCtrl.textStyle,
+          getSelectionTextStyle(newEditorCtrl.value, inputSelection),
           PushStateAction.Selection,
           command.mergeLast,
         );
@@ -7765,6 +7799,76 @@ function RedoIcon(props: ToolbarIconProps): JSX.Element {
       {...props}
     >
       <path d="M447.5 224H456c13.3 0 24-10.7 24-24V72c0-9.7-5.8-18.5-14.8-22.2s-19.3-1.7-26.2 5.2L397.4 96.6c-87.6-86.5-228.7-86.2-315.8 1c-87.5 87.5-87.5 229.3 0 316.8s229.3 87.5 316.8 0c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0c-62.5 62.5-163.8 62.5-226.3 0s-62.5-163.8 0-226.3c62.2-62.2 162.7-62.5 225.3-1L311 183c-6.9 6.9-8.9 17.2-5.2 26.2s12.5 14.8 22.2 14.8H447.5z" />
+    </ToolbarIcon>
+  );
+}
+
+function IndentIcon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon
+      version="1.1"
+      width="12"
+      height="14"
+      viewBox="0 0 448 512"
+      {...props}
+    >
+      <path d="M0 64C0 46.3 14.3 32 32 32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 96 0 81.7 0 64zM192 192c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H224c-17.7 0-32-14.3-32-32zm32 96H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H224c-17.7 0-32-14.3-32-32s14.3-32 32-32zM0 448c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM127.8 268.6L25.8 347.9C15.3 356.1 0 348.6 0 335.3V176.7c0-13.3 15.3-20.8 25.8-12.6l101.9 79.3c8.2 6.4 8.2 18.9 0 25.3z" />
+    </ToolbarIcon>
+  );
+}
+
+function DedentIcon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon
+      version="1.1"
+      width="12"
+      height="14"
+      viewBox="0 0 512 512"
+      {...props}
+    >
+      <path d="M6 64C6 46.3 20.3 32 38 32H422c17.7 0 32 14.3 32 32s-14.3 32-32 32H38C20.3 96 6 81.7 6 64zM198 192c0-17.7 14.3-32 32-32H422c17.7 0 32 14.3 32 32s-14.3 32-32 32H230c-17.7 0-32-14.3-32-32zm32 96H422c17.7 0 32 14.3 32 32s-14.3 32-32 32H230c-17.7 0-32-14.3-32-32s14.3-32 32-32zM6 448c0-17.7 14.3-32 32-32H422c17.7 0 32 14.3 32 32s-14.3 32-32 32H38c-17.7 0-32-14.3-32-32zm.2-179.4c-8.2-6.4-8.2-18.9 0-25.3l101.9-79.3c10.5-8.2 25.8-.7 25.8 12.6V335.3c0 13.3-15.3 20.8-25.8 12.6L6.2 268.6z" />
+    </ToolbarIcon>
+  );
+}
+
+function AlignLeftIcon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon
+      version="1.1"
+      width="12"
+      height="14"
+      viewBox="0 0 448 512"
+      {...props}
+    >
+      <path d="M288 64c0 17.7-14.3 32-32 32H32C14.3 96 0 81.7 0 64S14.3 32 32 32H256c17.7 0 32 14.3 32 32zm0 256c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H256c17.7 0 32 14.3 32 32zM0 192c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 448c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z" />
+    </ToolbarIcon>
+  );
+}
+
+function AlignCenterIcon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon
+      version="1.1"
+      width="12"
+      height="14"
+      viewBox="0 0 448 512"
+      {...props}
+    >
+      <path d="M352 64c0-17.7-14.3-32-32-32H128c-17.7 0-32 14.3-32 32s14.3 32 32 32H320c17.7 0 32-14.3 32-32zm96 128c0-17.7-14.3-32-32-32H32c-17.7 0-32 14.3-32 32s14.3 32 32 32H416c17.7 0 32-14.3 32-32zM0 448c0 17.7 14.3 32 32 32H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H32c-17.7 0-32 14.3-32 32zM352 320c0-17.7-14.3-32-32-32H128c-17.7 0-32 14.3-32 32s14.3 32 32 32H320c17.7 0 32-14.3 32-32z" />
+    </ToolbarIcon>
+  );
+}
+
+function AlignRightIcon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon
+      version="1.1"
+      width="12"
+      height="14"
+      viewBox="0 0 448 512"
+      {...props}
+    >
+      <path d="M448 64c0 17.7-14.3 32-32 32H192c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32zm0 256c0 17.7-14.3 32-32 32H192c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32zM0 192c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 448c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z" />
     </ToolbarIcon>
   );
 }

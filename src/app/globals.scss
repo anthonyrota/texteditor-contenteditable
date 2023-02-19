@@ -341,9 +341,7 @@ i {
 }
 
 .editor .block-placeholder-br {
-  display: block;
   transform: scale(0.01);
-  clip-path: circle(0);
 }
 
 @mixin block-outline($x: 0.35em) {
