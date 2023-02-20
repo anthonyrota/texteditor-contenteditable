@@ -1974,18 +1974,8 @@ function getEncompassingRange(
   ) {
     range.setEnd(range.startContainer, range.startOffset);
   }
-  // console.log(
-  //   Array.from({ length: selection.rangeCount })
-  //     .fill(0)
-  //     .map((_, i) => selection.getRangeAt(i)),
-  // );
-  // return range;
-  // if (selection.rangeCount === 1) {
-  // } else {
-  // }
   for (let i = 1; i < selection.rangeCount; i++) {
     const selRange = selection.getRangeAt(i);
-    console.log(selRange);
     if (
       isDomPositionsBackwardsCmp(
         range.startContainer,
@@ -2015,6 +2005,15 @@ function getEncompassingRange(
     }
   }
   return range;
+}
+
+function getTableCellPoint(table: TableNode, editorId: string): TableCellPoint {
+  const row = table.rows.find((row) =>
+    row.cells.some((cell) => cell.value.id === editorId),
+  )!;
+  const rowIndex = table.rows.indexOf(row);
+  const columnIndex = row.cells.findIndex((cell) => cell.value.id === editorId);
+  return { rowIndex, columnIndex };
 }
 
 function findSelection(
@@ -2066,19 +2065,6 @@ function findSelection(
       [],
       false,
     ).retValue;
-  }
-  function getTableCellPoint(
-    table: TableNode,
-    editorId: string,
-  ): TableCellPoint {
-    const row = table.rows.find((row) =>
-      row.cells.some((cell) => cell.value.id === editorId),
-    )!;
-    const rowIndex = table.rows.indexOf(row);
-    const columnIndex = row.cells.findIndex(
-      (cell) => cell.value.id === editorId,
-    );
-    return { rowIndex, columnIndex };
   }
   const startParentTables = getParentTables(startPoint.editorId);
   const endParentTables = getParentTables(endPoint.editorId);
@@ -2234,9 +2220,7 @@ function getDirection(value: EditorValue, selection: Selection): Direction {
     if ((selection.end as ParagraphPoint).offset === selection.start.offset) {
       return Direction.Collapsed;
     }
-    {
-      return Direction.Backwards;
-    }
+    return Direction.Backwards;
   }
   if (
     selection.startCell.rowIndex > selection.endCell.rowIndex ||
@@ -7193,37 +7177,46 @@ function ReactEditor({
         console.error('error finding selection', error);
         return;
       }
+      function areSelectionsTheSameOrBackwards(
+        sel1: Selection,
+        sel2: Selection,
+      ): boolean {
+        return (
+          (sel1.editorId === sel2.editorId &&
+            sel1.type === SelectionType.Table &&
+            sel2.type === SelectionType.Table &&
+            sel1.tableId === sel2.tableId &&
+            sel1.startCell.rowIndex === sel2.endCell.rowIndex &&
+            sel1.startCell.columnIndex === sel2.endCell.columnIndex &&
+            sel1.endCell.rowIndex === sel2.startCell.rowIndex &&
+            sel1.endCell.columnIndex === sel2.startCell.columnIndex) ||
+          (sel1.type === SelectionType.Block &&
+            sel2.type === SelectionType.Block &&
+            sel1.start.blockId === sel2.end.blockId &&
+            ((sel1.start.type === BlockSelectionPointType.OtherBlock &&
+              sel2.end.type === BlockSelectionPointType.OtherBlock) ||
+              (sel1.start.type === BlockSelectionPointType.Paragraph &&
+                sel2.end.type === BlockSelectionPointType.Paragraph &&
+                sel1.start.offset === sel2.end.offset)) &&
+            sel1.end.blockId === sel2.start.blockId &&
+            ((sel1.end.type === BlockSelectionPointType.OtherBlock &&
+              sel2.start.type === BlockSelectionPointType.OtherBlock) ||
+              (sel1.end.type === BlockSelectionPointType.Paragraph &&
+                sel2.start.type === BlockSelectionPointType.Paragraph &&
+                sel1.end.offset === sel2.start.offset)))
+        );
+      }
       const nativeSelection = findSelection(
         editorCtrl.current.value,
         encompassingRange,
         isSelectionBackwards(curNativeSelection!),
       );
       if (
-        (nativeSelection.editorId === selection.editorId &&
-          nativeSelection.type === SelectionType.Table &&
-          selection.type === SelectionType.Table &&
-          nativeSelection.tableId === selection.tableId &&
-          nativeSelection.startCell.rowIndex === selection.endCell.rowIndex &&
-          nativeSelection.startCell.columnIndex ===
-            selection.endCell.columnIndex &&
-          nativeSelection.endCell.rowIndex === selection.startCell.rowIndex &&
-          nativeSelection.endCell.columnIndex ===
-            selection.startCell.columnIndex) ||
-        (nativeSelection.type === SelectionType.Block &&
-          selection.type === SelectionType.Block &&
-          nativeSelection.start.blockId === selection.end.blockId &&
-          ((nativeSelection.start.type === BlockSelectionPointType.OtherBlock &&
-            selection.end.type === BlockSelectionPointType.OtherBlock) ||
-            (nativeSelection.start.type === BlockSelectionPointType.Paragraph &&
-              selection.end.type === BlockSelectionPointType.Paragraph &&
-              nativeSelection.start.offset === selection.end.offset)) &&
-          nativeSelection.end.blockId === selection.start.blockId &&
-          ((nativeSelection.end.type === BlockSelectionPointType.OtherBlock &&
-            selection.start.type === BlockSelectionPointType.OtherBlock) ||
-            (nativeSelection.end.type === BlockSelectionPointType.Paragraph &&
-              selection.start.type === BlockSelectionPointType.Paragraph &&
-              nativeSelection.end.offset === selection.start.offset)))
+        editorCtrl.current.selection &&
+        areSelectionsTheSameOrBackwards(selection, editorCtrl.current.selection)
       ) {
+        selection = editorCtrl.current.selection;
+      } else if (areSelectionsTheSameOrBackwards(selection, nativeSelection)) {
         selection = nativeSelection;
       }
       let data: EditorDataTransfer | undefined;
@@ -7329,7 +7322,10 @@ function ReactEditor({
   }, []);
 
   const onHTMLSelectionChange = useCallback(
-    (eventOrForce: Event | true): void => {
+    (
+      eventOrForce: Event | true,
+      mouseDownFirefoxStart?: Selection | null,
+    ): void => {
       if (isMouseDownRef.current === true) {
         isMouseDownRef.current = 1;
       }
@@ -7436,6 +7432,102 @@ function ReactEditor({
         );
         return;
       }
+      if (
+        mouseDownFirefoxStart &&
+        curSelection.type === SelectionType.Table &&
+        mouseDownFirefoxStart.type === SelectionType.Block &&
+        isCollapsed(mouseDownFirefoxStart)
+      ) {
+        curSelection =
+          walkEditorValues<Selection | undefined>(
+            editorCtrl.current.value,
+            (subValue, _data, ids) => {
+              if (subValue.id !== mouseDownFirefoxStart.editorId) {
+                return {
+                  stop: false,
+                  data: undefined,
+                };
+              }
+              if (
+                subValue.blocks.some(
+                  (block) => block.id === mouseDownFirefoxStart.start.blockId,
+                )
+              ) {
+                const tableNode = ids!.parentBlock;
+                if (tableNode.id !== (curSelection as TableSelection).tableId) {
+                  return {
+                    stop: true,
+                    data: undefined,
+                  };
+                }
+                const firstClickedCell = getTableCellPoint(
+                  tableNode,
+                  subValue.id,
+                );
+                if (firstClickedCell.rowIndex === -1) {
+                  return {
+                    stop: true,
+                    data: undefined,
+                  };
+                }
+                let newSelection: TableSelection;
+                const curTS = curSelection as TableSelection;
+                if (
+                  firstClickedCell.rowIndex === curTS.endCell.rowIndex &&
+                  firstClickedCell.columnIndex === curTS.endCell.columnIndex
+                ) {
+                  newSelection = {
+                    type: SelectionType.Table,
+                    editorId: curTS.editorId,
+                    tableId: curTS.tableId,
+                    startCell: curTS.endCell,
+                    endCell: curTS.startCell,
+                  };
+                } else if (
+                  firstClickedCell.rowIndex === curTS.startCell.rowIndex &&
+                  firstClickedCell.columnIndex === curTS.endCell.columnIndex
+                ) {
+                  newSelection = {
+                    type: SelectionType.Table,
+                    editorId: curTS.editorId,
+                    tableId: curTS.tableId,
+                    startCell: firstClickedCell,
+                    endCell: {
+                      rowIndex: curTS.endCell.rowIndex,
+                      columnIndex: curTS.startCell.columnIndex,
+                    },
+                  };
+                } else if (
+                  firstClickedCell.rowIndex === curTS.endCell.rowIndex &&
+                  firstClickedCell.columnIndex === curTS.startCell.columnIndex
+                ) {
+                  newSelection = {
+                    type: SelectionType.Table,
+                    editorId: curTS.editorId,
+                    tableId: curTS.tableId,
+                    startCell: firstClickedCell,
+                    endCell: {
+                      rowIndex: curTS.startCell.rowIndex,
+                      columnIndex: curTS.endCell.columnIndex,
+                    },
+                  };
+                } else {
+                  newSelection = curTS;
+                }
+                return {
+                  stop: true,
+                  data: newSelection,
+                };
+              }
+              return {
+                stop: false,
+                data: undefined,
+              };
+            },
+            undefined,
+            false,
+          ).retValue || curSelection;
+      }
       queueCommand({
         type: CommandType.Selection,
         selection: curSelection,
@@ -7532,6 +7624,7 @@ function ReactEditor({
   );
 
   const isMouseDownRef = useRef<boolean | 1>(false);
+  const mouseDownFirefoxStart = useRef<Selection | null>(null);
 
   useEffect(() => {
     const editorElement = editorRef.current!;
@@ -7545,13 +7638,30 @@ function ReactEditor({
       }
     };
     const onMouseDown = () => {
+      if (isFirefox) {
+        setTimeout(() => {
+          if (!isMouseDownRef.current) {
+            return;
+          }
+          const curNativeSel = window.getSelection();
+          if (curNativeSel && isFocused()) {
+            mouseDownFirefoxStart.current = findSelection(
+              editorCtrl.current.value,
+              getEncompassingRange(curNativeSel),
+              isSelectionBackwards(curNativeSel),
+            );
+          }
+        });
+      }
       isMouseDownRef.current = true;
     };
     const onMouseUp = () => {
       const val = isMouseDownRef.current;
+      const mdfs = mouseDownFirefoxStart.current;
       isMouseDownRef.current = false;
+      mouseDownFirefoxStart.current = null;
       if (val === 1 && editorCtrl.current.selection) {
-        onHTMLSelectionChange(true);
+        onHTMLSelectionChange(true, mdfs);
       }
     };
     window.addEventListener('touchstart', stfuMonacoForBlockingScroll, true);
