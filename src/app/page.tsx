@@ -7609,7 +7609,7 @@ function ReactEditor({
                 (sel as BlockSelection).start.blockId ===
                   editorCtrl.current.value.blocks[0].id &&
                 ((sel as BlockSelection).start as ParagraphPoint).offset === 0
-              : cmd !== cmds['space'])
+              : cmd !== cmds['any delete forward'] &&  cmd !== cmds['space'])
           ) {
             event.preventDefault();
           }
