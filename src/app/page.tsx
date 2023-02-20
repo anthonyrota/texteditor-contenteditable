@@ -1941,6 +1941,82 @@ function findParentEditors(
   ).retValue;
 }
 
+function isDomPositionsBackwardsCmp(
+  anchorNode: Node,
+  anchorOffset: number,
+  focusNode: Node,
+  focusOffset: number,
+): boolean {
+  let position = anchorNode.compareDocumentPosition(focusNode!);
+  return (
+    (!position && anchorOffset > focusOffset) ||
+    position === Node.DOCUMENT_POSITION_PRECEDING
+  );
+}
+
+function isSelectionBackwards(selection: globalThis.Selection): boolean {
+  return isDomPositionsBackwardsCmp(
+    selection.anchorNode!,
+    selection.anchorOffset,
+    selection.focusNode!,
+    selection.focusOffset,
+  );
+}
+
+function getEncompassingRange(
+  selection: globalThis.Selection,
+): globalThis.Range {
+  let range = selection.getRangeAt(0);
+  if (
+    isFirefox &&
+    range.endContainer instanceof HTMLElement &&
+    range.endContainer.matches('.block-table__tr')
+  ) {
+    range.setEnd(range.startContainer, range.startOffset);
+  }
+  // console.log(
+  //   Array.from({ length: selection.rangeCount })
+  //     .fill(0)
+  //     .map((_, i) => selection.getRangeAt(i)),
+  // );
+  // return range;
+  // if (selection.rangeCount === 1) {
+  // } else {
+  // }
+  for (let i = 1; i < selection.rangeCount; i++) {
+    const selRange = selection.getRangeAt(i);
+    console.log(selRange);
+    if (
+      isDomPositionsBackwardsCmp(
+        range.startContainer,
+        range.startOffset,
+        selRange.startContainer,
+        selRange.startOffset,
+      )
+    ) {
+      range.setStart(selRange.startContainer, selRange.startOffset);
+    }
+    if (
+      isDomPositionsBackwardsCmp(
+        selRange.endContainer,
+        selRange.endOffset,
+        range.endContainer,
+        range.endOffset,
+      )
+    ) {
+      range.setEnd(
+        selRange.endContainer,
+        isFirefox &&
+          selRange.endContainer instanceof HTMLElement &&
+          selRange.endContainer.matches('.block-table__tr')
+          ? selRange.startOffset
+          : selRange.endOffset,
+      );
+    }
+  }
+  return range;
+}
+
 function findSelection(
   value: EditorValue,
   range: Range | StaticRange,
@@ -3854,6 +3930,9 @@ if (isBrowser) {
     /os ([\.\_\d]+) like mac os/i.test(window.navigator.userAgent) ||
     /mac os x/i.test(window.navigator.userAgent);
 }
+const isFirefox =
+  typeof window !== 'undefined' &&
+  navigator.userAgent.toLowerCase().indexOf('firefox') > -1;
 
 interface CompatibleKeyboardEvent {
   readonly altKey: boolean;
@@ -4421,7 +4500,7 @@ function scrollIntoView(
     scroller === window.document.documentElement;
   const backward = isDomSelectionBackward(selection);
 
-  const range = selection.getRangeAt(0).cloneRange();
+  const range = getEncompassingRange(selection).cloneRange();
   range.collapse(backward);
   let cursorRect = range.getBoundingClientRect();
 
@@ -6947,16 +7026,6 @@ function ReactEditor({
     }
   });
 
-  function isSelectionBackwards(selection: globalThis.Selection): boolean {
-    let position = selection.anchorNode!.compareDocumentPosition(
-      selection.focusNode!,
-    );
-    return (
-      (!position && selection.anchorOffset > selection.focusOffset) ||
-      position === Node.DOCUMENT_POSITION_PRECEDING
-    );
-  }
-
   function isFocused(): boolean {
     return (
       !!document.activeElement &&
@@ -7036,9 +7105,9 @@ function ReactEditor({
         return;
       }
       event.preventDefault();
-      const curNativeSelection = window.getSelection();
-      const targetRange =
-        event.getTargetRanges()[0] || curNativeSelection?.getRangeAt(0);
+      const curNativeSelection = window.getSelection()!;
+      const encompassingRange = getEncompassingRange(curNativeSelection);
+      const targetRange = event.getTargetRanges()[0] || encompassingRange;
       if (
         hasPlaceholder &&
         placeholderRef.current &&
@@ -7056,42 +7125,38 @@ function ReactEditor({
         console.error('error finding selection', error);
         return;
       }
-      if (curNativeSelection) {
-        const nativeSelection = findSelection(
-          editorCtrl.current.value,
-          curNativeSelection!.getRangeAt(0),
-          isSelectionBackwards(curNativeSelection!),
-        );
-        if (
-          (nativeSelection.editorId === selection.editorId &&
-            nativeSelection.type === SelectionType.Table &&
-            selection.type === SelectionType.Table &&
-            nativeSelection.tableId === selection.tableId &&
-            nativeSelection.startCell.rowIndex === selection.endCell.rowIndex &&
-            nativeSelection.startCell.columnIndex ===
-              selection.endCell.columnIndex &&
-            nativeSelection.endCell.rowIndex === selection.startCell.rowIndex &&
-            nativeSelection.endCell.columnIndex ===
-              selection.startCell.columnIndex) ||
-          (nativeSelection.type === SelectionType.Block &&
-            selection.type === SelectionType.Block &&
-            nativeSelection.start.blockId === selection.end.blockId &&
-            ((nativeSelection.start.type ===
-              BlockSelectionPointType.OtherBlock &&
-              selection.end.type === BlockSelectionPointType.OtherBlock) ||
-              (nativeSelection.start.type ===
-                BlockSelectionPointType.Paragraph &&
-                selection.end.type === BlockSelectionPointType.Paragraph &&
-                nativeSelection.start.offset === selection.end.offset)) &&
-            nativeSelection.end.blockId === selection.start.blockId &&
-            ((nativeSelection.end.type === BlockSelectionPointType.OtherBlock &&
-              selection.start.type === BlockSelectionPointType.OtherBlock) ||
-              (nativeSelection.end.type === BlockSelectionPointType.Paragraph &&
-                selection.start.type === BlockSelectionPointType.Paragraph &&
-                nativeSelection.end.offset === selection.start.offset)))
-        ) {
-          selection = nativeSelection;
-        }
+      const nativeSelection = findSelection(
+        editorCtrl.current.value,
+        encompassingRange,
+        isSelectionBackwards(curNativeSelection!),
+      );
+      if (
+        (nativeSelection.editorId === selection.editorId &&
+          nativeSelection.type === SelectionType.Table &&
+          selection.type === SelectionType.Table &&
+          nativeSelection.tableId === selection.tableId &&
+          nativeSelection.startCell.rowIndex === selection.endCell.rowIndex &&
+          nativeSelection.startCell.columnIndex ===
+            selection.endCell.columnIndex &&
+          nativeSelection.endCell.rowIndex === selection.startCell.rowIndex &&
+          nativeSelection.endCell.columnIndex ===
+            selection.startCell.columnIndex) ||
+        (nativeSelection.type === SelectionType.Block &&
+          selection.type === SelectionType.Block &&
+          nativeSelection.start.blockId === selection.end.blockId &&
+          ((nativeSelection.start.type === BlockSelectionPointType.OtherBlock &&
+            selection.end.type === BlockSelectionPointType.OtherBlock) ||
+            (nativeSelection.start.type === BlockSelectionPointType.Paragraph &&
+              selection.end.type === BlockSelectionPointType.Paragraph &&
+              nativeSelection.start.offset === selection.end.offset)) &&
+          nativeSelection.end.blockId === selection.start.blockId &&
+          ((nativeSelection.end.type === BlockSelectionPointType.OtherBlock &&
+            selection.start.type === BlockSelectionPointType.OtherBlock) ||
+            (nativeSelection.end.type === BlockSelectionPointType.Paragraph &&
+              selection.start.type === BlockSelectionPointType.Paragraph &&
+              nativeSelection.end.offset === selection.start.offset)))
+      ) {
+        selection = nativeSelection;
       }
       let data: EditorDataTransfer | undefined;
       function mapValue(value: EditorValue): EditorValue {
@@ -7195,105 +7260,117 @@ function ReactEditor({
     };
   }, []);
 
-  const onHTMLSelectionChange = useCallback((): void => {
-    if (isUpdatingSelection.current > 0) {
-      return;
-    }
+  const onHTMLSelectionChange = useCallback(
+    (eventOrForce: Event | true): void => {
+      if (isUpdatingSelection.current > 0) {
+        return;
+      }
 
-    const nativeSelection = window.getSelection()!;
+      const nativeSelection = window.getSelection()!;
 
-    if (
-      document.activeElement &&
-      editorRef.current!.contains(document.activeElement) &&
-      nativeSelection.anchorNode &&
-      closest(nativeSelection.anchorNode, '.monaco-editor')
-    ) {
-      const blockId = closest(
-        nativeSelection.anchorNode!,
-        `[data-type="${BlockNodeType.Code}"]`,
-      )!.getAttribute('data-id')!;
-      const editorId = closest(
-        nativeSelection.anchorNode!,
-        `[data-family="${EditorFamilyType.Editor}"]`,
-      )!.getAttribute('data-id')!;
-      queueCommand({
-        type: CommandType.Selection,
-        selection: {
+      if (
+        document.activeElement &&
+        editorRef.current!.contains(document.activeElement) &&
+        nativeSelection.anchorNode &&
+        closest(nativeSelection.anchorNode, '.monaco-editor')
+      ) {
+        const blockId = closest(
+          nativeSelection.anchorNode!,
+          `[data-type="${BlockNodeType.Code}"]`,
+        )!.getAttribute('data-id')!;
+        const editorId = closest(
+          nativeSelection.anchorNode!,
+          `[data-family="${EditorFamilyType.Editor}"]`,
+        )!.getAttribute('data-id')!;
+        queueCommand({
+          type: CommandType.Selection,
+          selection: {
+            type: SelectionType.Block,
+            editorId,
+            start: {
+              type: BlockSelectionPointType.OtherBlock,
+              blockId,
+            },
+            end: {
+              type: BlockSelectionPointType.OtherBlock,
+              blockId,
+            },
+          },
+          doNotUpdateSelection: true,
+          mergeLast: true,
+        });
+        return;
+      }
+
+      if (!isFocused() || nativeSelection.rangeCount === 0) {
+        queueCommand({
+          type: CommandType.Selection,
+          selection: null,
+        });
+        return;
+      }
+
+      if (
+        eventOrForce !== true &&
+        isFirefox &&
+        nativeSelection.focusNode instanceof HTMLElement &&
+        nativeSelection.focusNode.matches('.block-table__tr')
+      ) {
+        return;
+      }
+
+      if (
+        hasPlaceholder &&
+        placeholderRef.current &&
+        (nativeSelection.anchorNode === placeholderRef.current ||
+          nativeSelection.focusNode === placeholderRef.current ||
+          placeholderRef.current.contains(nativeSelection.anchorNode) ||
+          placeholderRef.current.contains(nativeSelection.focusNode))
+      ) {
+        const curSelection: Selection = {
           type: SelectionType.Block,
-          editorId,
+          editorId: editorCtrl.current.value.id,
           start: {
-            type: BlockSelectionPointType.OtherBlock,
-            blockId,
+            type: BlockSelectionPointType.Paragraph,
+            blockId: editorCtrl.current.value.blocks[0].id,
+            offset: 0,
           },
           end: {
-            type: BlockSelectionPointType.OtherBlock,
-            blockId,
+            type: BlockSelectionPointType.Paragraph,
+            blockId: editorCtrl.current.value.blocks[0].id,
+            offset: 0,
           },
-        },
-        doNotUpdateSelection: true,
-        mergeLast: true,
-      });
-      return;
-    }
+        };
+        queueCommand({
+          type: CommandType.Selection,
+          selection: curSelection,
+        });
+        return;
+      }
 
-    if (!isFocused() || nativeSelection.rangeCount === 0) {
-      queueCommand({
-        type: CommandType.Selection,
-        selection: null,
-      });
-      return;
-    }
-
-    if (
-      hasPlaceholder &&
-      placeholderRef.current &&
-      (nativeSelection.anchorNode === placeholderRef.current ||
-        nativeSelection.focusNode === placeholderRef.current ||
-        placeholderRef.current.contains(nativeSelection.anchorNode) ||
-        placeholderRef.current.contains(nativeSelection.focusNode))
-    ) {
-      const curSelection: Selection = {
-        type: SelectionType.Block,
-        editorId: editorCtrl.current.value.id,
-        start: {
-          type: BlockSelectionPointType.Paragraph,
-          blockId: editorCtrl.current.value.blocks[0].id,
-          offset: 0,
-        },
-        end: {
-          type: BlockSelectionPointType.Paragraph,
-          blockId: editorCtrl.current.value.blocks[0].id,
-          offset: 0,
-        },
-      };
+      let curSelection: Selection;
+      try {
+        curSelection = findSelection(
+          editorCtrl.current.value,
+          getEncompassingRange(nativeSelection),
+          isSelectionBackwards(nativeSelection),
+        );
+      } catch (error) {
+        console.error(
+          'error finding selection',
+          document.activeElement,
+          nativeSelection.anchorNode,
+          nativeSelection.focusNode,
+        );
+        return;
+      }
       queueCommand({
         type: CommandType.Selection,
         selection: curSelection,
       });
-      return;
-    }
-
-    let curSelection: Selection;
-    try {
-      curSelection = findSelection(
-        editorCtrl.current.value,
-        nativeSelection.getRangeAt(0),
-        isSelectionBackwards(nativeSelection),
-      );
-    } catch (error) {
-      console.error(
-        'error finding selection',
-        document.activeElement,
-        nativeSelection.anchorNode,
-        nativeSelection.focusNode,
-      );
-      return;
-    }
-    queueCommand({
-      type: CommandType.Selection,
-      selection: curSelection,
-    });
-  }, [hasPlaceholder, queueCommand]);
+    },
+    [hasPlaceholder, queueCommand],
+  );
 
   const onCopy = useCallback(
     (event: ClipboardEvent): void => {
@@ -7303,7 +7380,7 @@ function ReactEditor({
       }
       const curSelection = findSelection(
         editorCtrl.current.value,
-        nativeSelection.getRangeAt(0),
+        getEncompassingRange(nativeSelection),
         isSelectionBackwards(nativeSelection),
       );
       if (!isCollapsed(curSelection)) {
@@ -7322,7 +7399,7 @@ function ReactEditor({
       }
       const curSelection = findSelection(
         editorCtrl.current.value,
-        nativeSelection.getRangeAt(0),
+        getEncompassingRange(nativeSelection),
         isSelectionBackwards(nativeSelection),
       );
       if (!isCollapsed(curSelection)) {
@@ -7350,7 +7427,7 @@ function ReactEditor({
       const sel = hasSel
         ? findSelection(
             editorCtrl.current.value,
-            curSelection.getRangeAt(0),
+            getEncompassingRange(curSelection),
             isSelectionBackwards(curSelection),
           )
         : null;
@@ -7401,7 +7478,7 @@ function ReactEditor({
     const onMouseUp = () => {
       isMouseDownRef.current = false;
       if (editorCtrl.current.selection) {
-        onHTMLSelectionChange();
+        onHTMLSelectionChange(true);
       }
     };
     window.addEventListener('touchstart', stfuMonacoForBlockingScroll, true);
