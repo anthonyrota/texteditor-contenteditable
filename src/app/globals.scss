@@ -504,11 +504,11 @@ i {
       padding: 0 0.5 * $spacing;
       padding-right: $spacing * 2;
     }
+  }
 
-    &::selection,
-    & *::selection {
-      background-color: transparent !important;
-    }
+  &::selection,
+  & *::selection {
+    background-color: transparent !important;
   }
 
   &__accessibility-hidden-text {

@@ -5885,6 +5885,7 @@ function convertFromElToEditorValue(
     }
     if (
       isBlock(node) ||
+      node.nodeName.toLowerCase() === 'table' ||
       (node.nodeName.toLowerCase() === 'img' &&
         (node as HTMLElement).hasAttribute('src'))
     ) {
@@ -5904,6 +5905,7 @@ function convertFromElToEditorValue(
         continue;
       }
       if (blockEl.tagName.toLowerCase() === 'table') {
+        console.log(blockEl);
         const rows: TableRow[] = [];
         let maxCols = 0;
         for (let i = 0; i < blockEl.childNodes.length; i++) {
@@ -6187,12 +6189,13 @@ function ReactEditor({
           range.startOffset === native.focusOffset
         )
       ) {
-        // console.log(
-        //   range.endContainer,
-        //   range.startContainer,
-        //   native.anchorNode,
-        //   native.focusNode,
-        // );
+        console.log(
+          'manually setting selection',
+          range.endContainer,
+          range.startContainer,
+          native.anchorNode,
+          native.focusNode,
+        );
         native.setBaseAndExtent(
           range.endContainer,
           range.endOffset,
@@ -6214,12 +6217,13 @@ function ReactEditor({
           range.endOffset === native.focusOffset
         )
       ) {
-        // console.log(
-        //   range.startContainer,
-        //   range.endContainer,
-        //   native.anchorNode,
-        //   native.focusNode,
-        // );
+        console.log(
+          'manually setting selection',
+          range.startContainer,
+          range.endContainer,
+          native.anchorNode,
+          native.focusNode,
+        );
         native.setBaseAndExtent(
           range.startContainer,
           range.startOffset,
@@ -6931,7 +6935,9 @@ function ReactEditor({
   useEffect(() => {
     if (newDomSelectionRef.current !== null) {
       const sel = newDomSelectionRef.current;
-      updateSelection(sel);
+      if (!isMouseDownRef.current) {
+        updateSelection(sel);
+      }
       newDomSelectionRef.current = null;
       const selection = window.getSelection();
       if (!selection) {
@@ -7357,6 +7363,8 @@ function ReactEditor({
     [queueCommand],
   );
 
+  const isMouseDownRef = useRef(false);
+
   useEffect(() => {
     const editorElement = editorRef.current!;
     window.document.addEventListener('selectionchange', onHTMLSelectionChange);
@@ -7368,9 +7376,20 @@ function ReactEditor({
         event.stopImmediatePropagation();
       }
     };
+    const onMouseDown = () => {
+      isMouseDownRef.current = true;
+    };
+    const onMouseUp = () => {
+      isMouseDownRef.current = false;
+      if (editorCtrl.current.selection) {
+        updateSelection(editorCtrl.current.selection);
+      }
+    };
     window.addEventListener('touchstart', stfuMonacoForBlockingScroll, true);
     window.addEventListener('touchmove', stfuMonacoForBlockingScroll, true);
     window.addEventListener('touchend', stfuMonacoForBlockingScroll, true);
+    window.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
     editorElement.addEventListener('beforeinput', onBeforeInput);
     editorElement.addEventListener('copy', onCopy);
     editorElement.addEventListener('keydown', onKeyDown);
@@ -7390,6 +7409,8 @@ function ReactEditor({
         true,
       );
       window.removeEventListener('touchend', stfuMonacoForBlockingScroll, true);
+      window.addEventListener('mousedown', onMouseDown);
+      window.addEventListener('mouseup', onMouseUp);
       editorElement.removeEventListener('beforeinput', onBeforeInput);
       editorElement.removeEventListener('copy', onCopy);
       editorElement.removeEventListener('keydown', onKeyDown);
