@@ -341,7 +341,66 @@ i {
 }
 
 .editor .block-placeholder-br {
-  transform: scale(0.01);
+  font-size: 0px;
+}
+
+.block-align-left {
+  text-align: left;
+}
+.block-align-center {
+  text-align: center;
+}
+.block-align-right {
+  text-align: right;
+}
+.block-align-justify {
+  text-align: justify;
+}
+
+.editor ul,
+.editor ol {
+  list-style: none;
+}
+
+.bullet-list,
+.numbered-list {
+  position: relative;
+  left: -2em;
+}
+.bullet-list::before {
+  content: '\2022';
+  top: -50%;
+  border-radius: 1ch;
+  padding-inline: 1ch;
+  margin-inline-end: 1ch;
+  white-space: nowrap;
+}
+.numbered-list::before {
+  display: inline-block;
+  content: attr(data-num) '.';
+  top: -50%;
+  border-radius: 1ch;
+  padding-inline: 1ch;
+  margin-inline-end: 1ch;
+  white-space: nowrap;
+  width: var(--num-width);
+}
+
+.block-align-left-list-container {
+  display: flex;
+  justify-content: left;
+}
+.block-align-center-list-container {
+  display: flex;
+  justify-content: center;
+}
+.block-align-right-list-container {
+  display: flex;
+  justify-content: flex-end;
+}
+.block-align-justify-list-container {
+  display: flex;
+  text-align: justify;
 }
 
 @mixin block-outline($x: 0.35em) {

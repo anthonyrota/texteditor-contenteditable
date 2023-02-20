@@ -179,7 +179,6 @@ const MAX_INDENT = 8;
 interface ParagraphStyleBase {
   align?: TextAlign;
   indentLevel?: number;
-  hangingIndent?: true;
 }
 
 interface DefaultParagraphStyle extends ParagraphStyleBase {
@@ -915,6 +914,17 @@ function ReactCodeBlockNode_({
             loadingInner
           ) : (
             <MonacoEditor
+              defaultPath={`file:///${value.id}.${
+                {
+                  [CodeBlockLanguage.Css]: 'css',
+                  [CodeBlockLanguage.Html]: 'html',
+                  [CodeBlockLanguage.Js]: 'jsx',
+                  [CodeBlockLanguage.Json]: 'json',
+                  [CodeBlockLanguage.Ts]: 'tsx',
+                  [CodeBlockLanguage.Vue]: 'vue',
+                  [CodeBlockLanguage.PlainText]: 'txt',
+                }[value.language]
+              }`}
               loading={loadingInner}
               className={
                 isFocused
@@ -992,122 +1002,154 @@ const preloadComponents = [
 let monacoP: Promise<typeof import('monaco-editor')>;
 if (typeof window !== 'undefined') {
   monacoP = loader.init();
-  monacoP.then((monaco) => {
-    monaco.editor.defineTheme('my-theme', monacoTheme as any);
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-      target: monaco.languages.typescript.ScriptTarget.Latest,
-      allowNonTsExtensions: true,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      module: monaco.languages.typescript.ModuleKind.CommonJS,
-      noEmit: true,
-      esModuleInterop: true,
-      jsx: monaco.languages.typescript.JsxEmit.React,
-      reactNamespace: 'React',
-      allowJs: true,
-      typeRoots: ['node_modules/@types'],
-    });
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: true,
-      noSyntaxValidation: true,
-    });
-    monaco.languages.typescript.typescriptDefaults.addExtraLib(
-      '<<react-definition-file>>',
-      `file:///node_modules/@react/types/index.d.ts`,
-    );
-    monaco.languages.register({ id: 'vue' });
-    const formatLangs = [
-      CodeBlockLanguage.Css,
-      CodeBlockLanguage.Html,
-      CodeBlockLanguage.Js,
-      CodeBlockLanguage.Json,
-      CodeBlockLanguage.Ts,
-    ];
-    async function formatCodeBlock(
-      code: string,
-      language: CodeBlockLanguage | undefined,
-    ): Promise<string> {
-      const prettierOpts: PrettierOptions = {
-        singleQuote: true,
-        trailingComma: 'all',
-        tabWidth: 2,
+  Promise.all([monacoP, import('./monacoTypescriptDefinitions')]).then(
+    ([monaco, typescriptDefinitions]) => {
+      monaco.editor.defineTheme('my-theme', monacoTheme as any);
+      const compilerOptions: import('monaco-editor').languages.typescript.CompilerOptions =
+        {
+          target: monaco.languages.typescript.ScriptTarget.Latest,
+          allowNonTsExtensions: true,
+          moduleResolution:
+            monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+          module: monaco.languages.typescript.ModuleKind.CommonJS,
+          noEmit: true,
+          esModuleInterop: true,
+          jsx: monaco.languages.typescript.JsxEmit.React,
+          reactNamespace: 'React',
+          allowJs: true,
+          typeRoots: ['node_modules/@types'],
+          experimentalDecorators: true,
+        };
+      const diagnosticOptions: import('monaco-editor').languages.typescript.DiagnosticsOptions =
+        {
+          noSemanticValidation: true,
+          noSyntaxValidation: true,
+        };
+      monaco.languages.typescript.typescriptDefaults.setCompilerOptions(
+        compilerOptions,
+      );
+      monaco.languages.typescript.javascriptDefaults.setCompilerOptions(
+        compilerOptions,
+      );
+      monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions(
+        diagnosticOptions,
+      );
+      monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions(
+        diagnosticOptions,
+      );
+      const typeDefinitions = {
+        'file:///node_modules/@types/react/index.d.ts':
+          typescriptDefinitions.react,
+        'file:///node_modules/@types/react/global.d.ts':
+          typescriptDefinitions.reactGlobal,
+        'file:///node_modules/@types/react-dom/index.d.ts':
+          typescriptDefinitions.reactDom,
+        'file:///node_modules/@types/scheduler/tracing.d.ts':
+          typescriptDefinitions.schedulerTracing,
+        'file:///node_modules/@types/prop-types/index.d.ts':
+          typescriptDefinitions.propTypes,
+        'file:///node_modules/@types/csstype/index.d.ts':
+          typescriptDefinitions.cssType,
       };
-      const {
-        prettier,
-        prettierParserBabel,
-        prettierParserHtml,
-        prettierParserPostcss,
-        prettierParserTs,
-      } = await import(/* webpackPreload: true */ './prettierImports');
-      let prettierParser: string | undefined;
-      let formatted = code;
-      if (language === CodeBlockLanguage.Ts) {
-        prettierParser = 'typescript';
-      } else if (language === CodeBlockLanguage.Js) {
-        prettierParser = 'babel';
-      } else if (language === CodeBlockLanguage.Css) {
-        prettierParser = 'css';
-      } else if (language === CodeBlockLanguage.Html) {
-        prettierParser = 'html';
-      } else if (language === CodeBlockLanguage.Vue) {
-        prettierParser = 'vue';
-      }
-      if (prettierParser) {
-        try {
-          formatted = prettier.format(code, {
-            ...prettierOpts,
-            parser: prettierParser,
-            plugins: [
-              prettierParserBabel,
-              prettierParserHtml,
-              prettierParserPostcss,
-              prettierParserTs,
-            ],
-          });
-        } catch (error) {
-          if (error instanceof Error && error.message.includes('resolve')) {
-            throw error;
+      Object.entries(typeDefinitions).forEach(([path, def]) => {
+        monaco.languages.typescript.typescriptDefaults.addExtraLib(def, path);
+        monaco.languages.typescript.javascriptDefaults.addExtraLib(def, path);
+      });
+      monaco.languages.register({ id: 'vue' });
+      const formatLangs = [
+        CodeBlockLanguage.Css,
+        CodeBlockLanguage.Html,
+        CodeBlockLanguage.Js,
+        CodeBlockLanguage.Json,
+        CodeBlockLanguage.Ts,
+      ];
+      async function formatCodeBlock(
+        code: string,
+        language: CodeBlockLanguage | undefined,
+      ): Promise<string> {
+        const prettierOpts: PrettierOptions = {
+          singleQuote: true,
+          trailingComma: 'all',
+          tabWidth: 2,
+        };
+        const {
+          prettier,
+          prettierParserBabel,
+          prettierParserHtml,
+          prettierParserPostcss,
+          prettierParserTs,
+        } = await import(/* webpackPreload: true */ './prettierImports');
+        let prettierParser: string | undefined;
+        let formatted = code;
+        if (language === CodeBlockLanguage.Ts) {
+          prettierParser = 'typescript';
+        } else if (language === CodeBlockLanguage.Js) {
+          prettierParser = 'babel';
+        } else if (language === CodeBlockLanguage.Css) {
+          prettierParser = 'css';
+        } else if (language === CodeBlockLanguage.Html) {
+          prettierParser = 'html';
+        } else if (language === CodeBlockLanguage.Vue) {
+          prettierParser = 'vue';
+        }
+        if (prettierParser) {
+          try {
+            formatted = prettier.format(code, {
+              ...prettierOpts,
+              parser: prettierParser,
+              plugins: [
+                prettierParserBabel,
+                prettierParserHtml,
+                prettierParserPostcss,
+                prettierParserTs,
+              ],
+            });
+          } catch (error) {
+            if (error instanceof Error && error.message.includes('resolve')) {
+              throw error;
+            }
           }
         }
+        return formatted.replace(/[\r\n]+$/, '');
       }
-      return formatted.replace(/[\r\n]+$/, '');
-    }
-    formatLangs.forEach((lang) => {
-      monaco.languages.registerDocumentFormattingEditProvider(
-        { language: lang, exclusive: true },
-        {
-          async provideDocumentFormattingEdits(model) {
-            return [
-              {
-                range: model.getFullModelRange(),
-                text: await formatCodeBlock(
-                  model.getValue(),
-                  // @ts-expect-error
-                  model._isVue ? CodeBlockLanguage.Vue : lang,
-                ),
-              },
-            ];
+      formatLangs.forEach((lang) => {
+        monaco.languages.registerDocumentFormattingEditProvider(
+          { language: lang, exclusive: true },
+          {
+            async provideDocumentFormattingEdits(model) {
+              return [
+                {
+                  range: model.getFullModelRange(),
+                  text: await formatCodeBlock(
+                    model.getValue(),
+                    // @ts-expect-error
+                    model._isVue ? CodeBlockLanguage.Vue : lang,
+                  ),
+                },
+              ];
+            },
           },
-        },
-      );
-      monaco.languages.registerDocumentRangeFormattingEditProvider(
-        { language: lang, exclusive: true },
-        {
-          async provideDocumentRangeFormattingEdits(model, range) {
-            return [
-              {
-                range: model.getFullModelRange(),
-                text: await formatCodeBlock(
-                  model.getValue(),
-                  // @ts-expect-error
-                  model._isVue ? CodeBlockLanguage.Vue : lang,
-                ),
-              },
-            ];
+        );
+        monaco.languages.registerDocumentRangeFormattingEditProvider(
+          { language: lang, exclusive: true },
+          {
+            async provideDocumentRangeFormattingEdits(model, range) {
+              return [
+                {
+                  range: model.getFullModelRange(),
+                  text: await formatCodeBlock(
+                    model.getValue(),
+                    // @ts-expect-error
+                    model._isVue ? CodeBlockLanguage.Vue : lang,
+                  ),
+                },
+              ];
+            },
           },
-        },
-      );
-    });
-  });
+        );
+      });
+    },
+  );
 }
 
 function ReactParagraphNode_(props: {
@@ -1178,24 +1220,26 @@ function ReactParagraphNode_(props: {
       (children as JSX.Element[]).push(...texts);
     });
   }
+  const alignCls =
+    value.style.align === TextAlign.Left
+      ? 'block-align-left'
+      : value.style.align === TextAlign.Right
+      ? 'block-align-right'
+      : value.style.align === TextAlign.Center
+      ? 'block-align-center'
+      : value.style.align === TextAlign.Justify
+      ? 'block-align-justify'
+      : undefined;
   let style: React.CSSProperties = {
-    textAlign:
-      value.style.align === TextAlign.Left
-        ? 'left'
-        : value.style.align === TextAlign.Right
-        ? 'right'
-        : value.style.align === TextAlign.Center
-        ? 'center'
-        : value.style.align === TextAlign.Justify
-        ? 'justify'
-        : undefined,
     marginLeft: value.style.indentLevel && `${value.style.indentLevel * 2}em`,
   };
   switch (value.style.type) {
     case ParagraphStyleType.Default: {
       return (
         <p
-          className="paragraph-container--with-toplevel-padding"
+          className={
+            'paragraph-container--with-toplevel-padding' + ' ' + alignCls
+          }
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -1209,7 +1253,9 @@ function ReactParagraphNode_(props: {
     case ParagraphStyleType.Heading2: {
       return (
         <h2
-          className="paragraph-container--with-toplevel-padding"
+          className={
+            'paragraph-container--with-toplevel-padding' + ' ' + alignCls
+          }
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -1223,7 +1269,9 @@ function ReactParagraphNode_(props: {
     case ParagraphStyleType.Heading1: {
       return (
         <h1
-          className="paragraph-container--with-toplevel-padding"
+          className={
+            'paragraph-container--with-toplevel-padding' + ' ' + alignCls
+          }
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -1237,7 +1285,9 @@ function ReactParagraphNode_(props: {
     case ParagraphStyleType.Heading3: {
       return (
         <h3
-          className="paragraph-container--with-toplevel-padding"
+          className={
+            'paragraph-container--with-toplevel-padding' + ' ' + alignCls
+          }
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -1251,7 +1301,9 @@ function ReactParagraphNode_(props: {
     case ParagraphStyleType.Heading4: {
       return (
         <h4
-          className="paragraph-container--with-toplevel-padding"
+          className={
+            'paragraph-container--with-toplevel-padding' + ' ' + alignCls
+          }
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -1265,6 +1317,7 @@ function ReactParagraphNode_(props: {
     case ParagraphStyleType.BlockQuote: {
       return (
         <blockquote
+          className={alignCls}
           style={style}
           data-family={EditorFamilyType.Block}
           data-type={BlockNodeType.Paragraph}
@@ -1279,18 +1332,24 @@ function ReactParagraphNode_(props: {
       return (
         <li
           className={[
+            'bullet-list',
+            (alignCls || 'block-align-left') + '-list-container',
             'paragraph-container--with-toplevel-padding',
             props.isFirstListItem && 'first-list-item',
           ]
             .filter(Boolean)
             .join(' ')}
           style={omit(style, ['marginLeft'])}
-          data-family={EditorFamilyType.Block}
-          data-type={BlockNodeType.Paragraph}
-          data-empty-paragraph={isEmpty}
-          data-id={value.id}
         >
-          {children}
+          <div
+            className="block-list-item__inner"
+            data-family={EditorFamilyType.Block}
+            data-type={BlockNodeType.Paragraph}
+            data-empty-paragraph={isEmpty}
+            data-id={value.id}
+          >
+            {children}
+          </div>
         </li>
       );
     }
@@ -1298,18 +1357,30 @@ function ReactParagraphNode_(props: {
       return (
         <li
           className={[
+            'numbered-list',
+            (alignCls || 'block-align-left') + '-list-container',
             'paragraph-container--with-toplevel-padding',
             props.isFirstListItem && 'first-list-item',
           ]
             .filter(Boolean)
             .join(' ')}
-          style={omit(style, ['marginLeft'])}
-          data-family={EditorFamilyType.Block}
-          data-type={BlockNodeType.Paragraph}
-          data-empty-paragraph={isEmpty}
-          data-id={value.id}
+          style={
+            {
+              ...omit(style, ['marginLeft']),
+              '--num-width': (props.listIndex! + 1).toString().length + 'ch',
+            } as React.CSSProperties
+          }
+          data-num={props.listIndex! + 1}
         >
-          {children}
+          <div
+            className="block-list-item__inner"
+            data-family={EditorFamilyType.Block}
+            data-type={BlockNodeType.Paragraph}
+            data-empty-paragraph={isEmpty}
+            data-id={value.id}
+          >
+            {children}
+          </div>
         </li>
       );
     }
@@ -3854,6 +3925,7 @@ const BACKSLASH = 220;
 const isAlignLeft = allPass([hasControlKey, hasKeyCode(L)]);
 const isAlignCenter = allPass([hasControlKey, hasKeyCode(E)]);
 const isAlignRight = allPass([hasControlKey, hasKeyCode(R)]);
+const isAlignJustify = allPass([hasControlKey, hasKeyCode(J)]);
 const isIndent = allPass([hasControlKey, not(hasShiftKey), hasKeyCode(M)]);
 const isOutdent = allPass([hasControlKey, hasShiftKey, hasKeyCode(M)]);
 const isDeleteBackward = anyPass([
@@ -4508,10 +4580,12 @@ type Command =
       origin?: string;
     }
   | {
+      type: CommandType.Redo | CommandType.Undo;
+      origin?: string;
+    }
+  | {
       type:
         | CommandType.ClearFormat
-        | CommandType.Redo
-        | CommandType.Undo
         | CommandType.DeleteBackwardKey
         | CommandType.SpaceKey;
       selection: Selection;
@@ -4531,18 +4605,21 @@ const cmds = {
       isActive: (c) => !!c.textStyle.bold,
       Icon: BoldIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.InlineFormat,
-        selection,
-        origin: 'bold shortcut',
-        condition: (style) => !!style.bold,
-        transform: (style, active) => ({
-          ...style,
-          bold: active ? undefined : true,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.InlineFormat,
+              selection,
+              origin: 'bold shortcut',
+              condition: (style) => !!style.bold,
+              transform: (style, active) => ({
+                ...style,
+                bold: active ? undefined : true,
+              }),
+            },
+          ],
   },
   italic: {
     isKey: isItalic,
@@ -4550,18 +4627,21 @@ const cmds = {
       isActive: (c) => !!c.textStyle.italic,
       Icon: ItalicIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.InlineFormat,
-        selection,
-        origin: 'italic shortcut',
-        condition: (style) => !!style.italic,
-        transform: (style, active) => ({
-          ...style,
-          italic: active ? undefined : true,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.InlineFormat,
+              selection,
+              origin: 'italic shortcut',
+              condition: (style) => !!style.italic,
+              transform: (style, active) => ({
+                ...style,
+                italic: active ? undefined : true,
+              }),
+            },
+          ],
   },
   underline: {
     isKey: isUnderline,
@@ -4569,18 +4649,21 @@ const cmds = {
       isActive: (c) => !!c.textStyle.underline,
       Icon: UnderlineIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.InlineFormat,
-        selection,
-        origin: 'underline shortcut',
-        condition: (style) => !!style.underline,
-        transform: (style, active) => ({
-          ...style,
-          underline: active ? undefined : true,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.InlineFormat,
+              selection,
+              origin: 'underline shortcut',
+              condition: (style) => !!style.underline,
+              transform: (style, active) => ({
+                ...style,
+                underline: active ? undefined : true,
+              }),
+            },
+          ],
   },
   'inline code': {
     isKey: isInlineCode,
@@ -4588,17 +4671,20 @@ const cmds = {
       isActive: (c) => !!c.textStyle.code,
       Icon: InlineCodeIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.InlineFormat,
-        selection,
-        condition: (style) => !!style.code,
-        transform: (style, active) => ({
-          ...style,
-          code: active ? undefined : true,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.InlineFormat,
+              selection,
+              condition: (style) => !!style.code,
+              transform: (style, active) => ({
+                ...style,
+                code: active ? undefined : true,
+              }),
+            },
+          ],
   },
   strikethrough: {
     isKey: isStrikethrough,
@@ -4606,18 +4692,21 @@ const cmds = {
       isActive: (c) => !!c.textStyle.strikethrough,
       Icon: StrikethroughIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.InlineFormat,
-        selection,
-        origin: 'strikethrough shortcut',
-        condition: (style) => !!style.strikethrough,
-        transform: (style, active) => ({
-          ...style,
-          strikethrough: active ? undefined : true,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.InlineFormat,
+              selection,
+              origin: 'strikethrough shortcut',
+              condition: (style) => !!style.strikethrough,
+              transform: (style, active) => ({
+                ...style,
+                strikethrough: active ? undefined : true,
+              }),
+            },
+          ],
   },
   superscript: {
     isKey: isSuperscript,
@@ -4625,18 +4714,21 @@ const cmds = {
       isActive: (c) => c.textStyle.script === TextScript.Superscript,
       Icon: SuperscriptIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.InlineFormat,
-        selection,
-        origin: 'superscript shortcut',
-        condition: (style) => style.script === TextScript.Superscript,
-        transform: (style, active) => ({
-          ...style,
-          script: active ? undefined : TextScript.Superscript,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.InlineFormat,
+              selection,
+              origin: 'superscript shortcut',
+              condition: (style) => style.script === TextScript.Superscript,
+              transform: (style, active) => ({
+                ...style,
+                script: active ? undefined : TextScript.Superscript,
+              }),
+            },
+          ],
   },
   subscript: {
     isKey: isSubscript,
@@ -4644,18 +4736,21 @@ const cmds = {
       isActive: (c) => c.textStyle.script === TextScript.Subscript,
       Icon: SubscriptIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.InlineFormat,
-        selection,
-        origin: 'subscript shortcut',
-        condition: (style) => style.script === TextScript.Subscript,
-        transform: (style, active) => ({
-          ...style,
-          script: active ? undefined : TextScript.Subscript,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.InlineFormat,
+              selection,
+              origin: 'subscript shortcut',
+              condition: (style) => style.script === TextScript.Subscript,
+              transform: (style, active) => ({
+                ...style,
+                script: active ? undefined : TextScript.Subscript,
+              }),
+            },
+          ],
   },
   'align left': {
     isKey: isAlignLeft,
@@ -4668,17 +4763,21 @@ const cmds = {
         ),
       Icon: AlignLeftIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => !style.align || style.align === TextAlign.Left,
-        transform: (style, active) => ({
-          ...style,
-          align: active ? undefined : style.align,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: (style) =>
+                !style.align || style.align === TextAlign.Left,
+              transform: (style, active) => ({
+                ...style,
+                align: active ? undefined : TextAlign.Left,
+              }),
+            },
+          ],
   },
   'align center': {
     isKey: isAlignCenter,
@@ -4691,17 +4790,20 @@ const cmds = {
         ),
       Icon: AlignCenterIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => style.align === TextAlign.Center,
-        transform: (style, active) => ({
-          ...style,
-          align: active ? undefined : TextAlign.Center,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: (style) => style.align === TextAlign.Center,
+              transform: (style, active) => ({
+                ...style,
+                align: active ? undefined : TextAlign.Center,
+              }),
+            },
+          ],
   },
   'align right': {
     isKey: isAlignRight,
@@ -4714,17 +4816,70 @@ const cmds = {
         ),
       Icon: AlignRightIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => style.align === TextAlign.Right,
-        transform: (style, active) => ({
-          ...style,
-          align: active ? undefined : TextAlign.Right,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: (style) => style.align === TextAlign.Right,
+              transform: (style, active) => ({
+                ...style,
+                align: active ? undefined : TextAlign.Right,
+              }),
+            },
+          ],
+  },
+  'align justify': {
+    isKey: isAlignJustify,
+    icon: {
+      isActive: (c) =>
+        isParagraphStyleActive(
+          c.value,
+          c.selection!,
+          (style) => style.align === TextAlign.Justify,
+        ),
+      Icon: AlignJustifyIcon,
+    },
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: (style) => style.align === TextAlign.Justify,
+              transform: (style, active) => ({
+                ...style,
+                align: active ? undefined : TextAlign.Justify,
+              }),
+            },
+          ],
+  },
+  'code block': {
+    isKey: isHeading1,
+    icon: {
+      isActive: (c) => false,
+      Icon: CodeBlockIcon,
+    },
+    getCmds: (selection, makeId) =>
+      !selection || !isCollapsed(selection)
+        ? []
+        : [
+            {
+              type: CommandType.Input,
+              selection,
+              inputType: 'insertText',
+              data: {
+                type: DataTransferType.Rich,
+                value: makeEditorValue(
+                  [makeCodeBlock('', CodeBlockLanguage.PlainText, makeId())],
+                  makeId(),
+                ),
+              },
+            },
+          ],
   },
   'heading 1': {
     isKey: isHeading1,
@@ -4737,19 +4892,22 @@ const cmds = {
         ),
       Icon: Heading1Icon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => style.type === ParagraphStyleType.Heading1,
-        transform: (style, active) => ({
-          ...style,
-          type: active
-            ? ParagraphStyleType.Default
-            : ParagraphStyleType.Heading1,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: (style) => style.type === ParagraphStyleType.Heading1,
+              transform: (style, active) => ({
+                ...style,
+                type: active
+                  ? ParagraphStyleType.Default
+                  : ParagraphStyleType.Heading1,
+              }),
+            },
+          ],
   },
   'heading 2': {
     isKey: isHeading2,
@@ -4762,19 +4920,22 @@ const cmds = {
         ),
       Icon: Heading2Icon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => style.type === ParagraphStyleType.Heading2,
-        transform: (style, active) => ({
-          ...style,
-          type: active
-            ? ParagraphStyleType.Default
-            : ParagraphStyleType.Heading2,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: (style) => style.type === ParagraphStyleType.Heading2,
+              transform: (style, active) => ({
+                ...style,
+                type: active
+                  ? ParagraphStyleType.Default
+                  : ParagraphStyleType.Heading2,
+              }),
+            },
+          ],
   },
   'heading 3': {
     isKey: isHeading3,
@@ -4787,19 +4948,22 @@ const cmds = {
         ),
       Icon: Heading3Icon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => style.type === ParagraphStyleType.Heading3,
-        transform: (style, active) => ({
-          ...style,
-          type: active
-            ? ParagraphStyleType.Default
-            : ParagraphStyleType.Heading3,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: (style) => style.type === ParagraphStyleType.Heading3,
+              transform: (style, active) => ({
+                ...style,
+                type: active
+                  ? ParagraphStyleType.Default
+                  : ParagraphStyleType.Heading3,
+              }),
+            },
+          ],
   },
   'heading 4': {
     isKey: isHeading4,
@@ -4812,19 +4976,22 @@ const cmds = {
         ),
       Icon: Heading4Icon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => style.type === ParagraphStyleType.Heading4,
-        transform: (style, active) => ({
-          ...style,
-          type: active
-            ? ParagraphStyleType.Default
-            : ParagraphStyleType.Heading4,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: (style) => style.type === ParagraphStyleType.Heading4,
+              transform: (style, active) => ({
+                ...style,
+                type: active
+                  ? ParagraphStyleType.Default
+                  : ParagraphStyleType.Heading4,
+              }),
+            },
+          ],
   },
   'block quote': {
     isKey: isBlockQuote,
@@ -4837,19 +5004,23 @@ const cmds = {
         ),
       Icon: BlockQuoteIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: (style) => style.type === ParagraphStyleType.BlockQuote,
-        transform: (style, active) => ({
-          ...style,
-          type: active
-            ? ParagraphStyleType.Default
-            : ParagraphStyleType.BlockQuote,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: (style) =>
+                style.type === ParagraphStyleType.BlockQuote,
+              transform: (style, active) => ({
+                ...style,
+                type: active
+                  ? ParagraphStyleType.Default
+                  : ParagraphStyleType.BlockQuote,
+              }),
+            },
+          ],
   },
   'bullet list': {
     isKey: isBulletList,
@@ -4863,6 +5034,9 @@ const cmds = {
       Icon: BulletListIcon,
     },
     getCmds: (selection, makeId) => {
+      if (!selection) {
+        return [];
+      }
       let newId: string | null = null;
       let getNewId = () => {
         if (newId === null) {
@@ -4899,6 +5073,9 @@ const cmds = {
       Icon: NumberedListIcon,
     },
     getCmds: (selection, makeId) => {
+      if (!selection) {
+        return [];
+      }
       let newId: string | null = null;
       let getNewId = () => {
         if (newId === null) {
@@ -4929,17 +5106,22 @@ const cmds = {
       isActive: () => false,
       Icon: DedentIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: () => false,
-        transform: (style) => ({
-          ...style,
-          indentLevel: style.indentLevel ? style.indentLevel - 1 : undefined,
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: () => false,
+              transform: (style) => ({
+                ...style,
+                indentLevel: style.indentLevel
+                  ? style.indentLevel - 1
+                  : undefined,
+              }),
+            },
+          ],
   },
   indent: {
     isKey: isIndent,
@@ -4947,26 +5129,32 @@ const cmds = {
       isActive: () => false,
       Icon: IndentIcon,
     },
-    getCmds: (selection) => [
-      {
-        type: CommandType.BlockFormat,
-        selection,
-        condition: () => false,
-        transform: (style) => ({
-          ...style,
-          indentLevel: Math.min((style.indentLevel || 0) + 1, MAX_INDENT),
-        }),
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.BlockFormat,
+              selection,
+              condition: () => false,
+              transform: (style) => ({
+                ...style,
+                indentLevel: Math.min((style.indentLevel || 0) + 1, MAX_INDENT),
+              }),
+            },
+          ],
   },
   'clear format': {
     isKey: isClearFormatting,
-    getCmds: (selection) => [
-      {
-        type: CommandType.ClearFormat,
-        selection,
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.ClearFormat,
+              selection,
+            },
+          ],
   },
   undo: {
     isKey: isUndo,
@@ -4974,10 +5162,9 @@ const cmds = {
       isActive: () => false,
       Icon: UndoIcon,
     },
-    getCmds: (selection) => [
+    getCmds: () => [
       {
         type: CommandType.Undo,
-        selection,
       },
     ],
   },
@@ -4987,30 +5174,35 @@ const cmds = {
       isActive: () => false,
       Icon: RedoIcon,
     },
-    getCmds: (selection) => [
+    getCmds: () => [
       {
         type: CommandType.Redo,
-        selection,
       },
     ],
   },
   'delete backward': {
     isKey: isDeleteBackward,
-    getCmds: (selection) => [
-      {
-        type: CommandType.DeleteBackwardKey,
-        selection,
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.DeleteBackwardKey,
+              selection,
+            },
+          ],
   },
   space: {
     isKey: isSpace,
-    getCmds: (selection) => [
-      {
-        type: CommandType.SpaceKey,
-        selection,
-      },
-    ],
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.SpaceKey,
+              selection,
+            },
+          ],
   },
 } satisfies {
   [name: string]: {
@@ -5019,7 +5211,7 @@ const cmds = {
       isActive: (editorCtrl: EditorController) => boolean;
       Icon: typeof ToolbarIcon;
     };
-    getCmds: (selection: Selection, makeId: () => string) => Command[];
+    getCmds: (selection: Selection | null, makeId: () => string) => Command[];
   };
 };
 
@@ -5128,27 +5320,27 @@ const defaultStyles: {
   },
   h1: {
     display: 'block',
-    fontWeight: 'bold',
+    /* fontWeight: 'bold', */ // unnecessary bold on heading
   },
   h2: {
     display: 'block',
-    fontWeight: 'bold',
+    /* fontWeight: 'bold', */ // unnecessary bold on heading
   },
   h3: {
     display: 'block',
-    fontWeight: 'bold',
+    /* fontWeight: 'bold', */ // unnecessary bold on heading
   },
   h4: {
     display: 'block',
-    fontWeight: 'bold',
+    /* fontWeight: 'bold', */ // unnecessary bold on heading
   },
   h5: {
     display: 'block',
-    fontWeight: 'bold',
+    /* fontWeight: 'bold', */ // unnecessary bold on heading
   },
   h6: {
     display: 'block',
-    fontWeight: 'bold',
+    /* fontWeight: 'bold', */ // unnecessary bold on heading
   },
   pre: {
     display: 'block',
@@ -5974,6 +6166,12 @@ function ReactEditor({
           range.startOffset === native.focusOffset
         )
       ) {
+        // console.log(
+        //   range.endContainer,
+        //   range.startContainer,
+        //   native.anchorNode,
+        //   native.focusNode,
+        // );
         native.setBaseAndExtent(
           range.endContainer,
           range.endOffset,
@@ -5995,6 +6193,12 @@ function ReactEditor({
           range.endOffset === native.focusOffset
         )
       ) {
+        // console.log(
+        //   range.startContainer,
+        //   range.endContainer,
+        //   native.anchorNode,
+        //   native.focusNode,
+        // );
         native.setBaseAndExtent(
           range.startContainer,
           range.startOffset,
@@ -6089,13 +6293,18 @@ function ReactEditor({
     let dropValue: EditorValue | null = null;
     let ignoreNext: boolean = false;
     let setNewSelection = true; // TODO fix.
+    function mapSel(sel: Selection): Selection {
+      return mapSelectionFns.reduce(
+        (selection, mapSelection) => mapSelection(selection, true),
+        sel,
+      );
+    }
     function processCommand(command: Command, i: number | null): void {
       if (ignoreNext) {
         ignoreNext = false;
         return;
       }
-      const originalSelection = command.selection;
-      if (!originalSelection) {
+      if ('selection' in command && !command.selection) {
         if (command.type !== CommandType.Selection) {
           throw new Error('expected selection');
         }
@@ -6114,11 +6323,8 @@ function ReactEditor({
         }
         return;
       }
-      let inputSelection = mapSelectionFns.reduce(
-        (selection, mapSelection) => mapSelection(selection, true),
-        originalSelection,
-      );
       if (command.type === CommandType.Input) {
+        const inputSelection = mapSel(command.selection);
         const { inputType, data } = command;
         switch (inputType) {
           case 'deleteByDrag':
@@ -6292,23 +6498,11 @@ function ReactEditor({
             break;
           }
           case 'historyUndo': {
-            processCommand(
-              {
-                type: CommandType.Undo,
-                selection: inputSelection,
-              },
-              null,
-            );
+            processCommand({ type: CommandType.Undo }, null);
             break;
           }
           case 'historyRedo': {
-            processCommand(
-              {
-                type: CommandType.Redo,
-                selection: inputSelection,
-              },
-              null,
-            );
+            processCommand({ type: CommandType.Redo }, null);
             break;
           }
           case 'formatBold':
@@ -6335,6 +6529,7 @@ function ReactEditor({
           }
         }
       } else if (command.type === CommandType.InlineFormat) {
+        const inputSelection = mapSel(command.selection);
         const edit = toggleInlineStyle(
           newEditorCtrl,
           inputSelection,
@@ -6381,6 +6576,7 @@ function ReactEditor({
           }
         }
       } else if (command.type === CommandType.BlockFormat) {
+        const inputSelection = mapSel(command.selection);
         const edit = toggleParagraphStyle(
           newEditorCtrl,
           inputSelection,
@@ -6395,6 +6591,7 @@ function ReactEditor({
           PushStateAction.Unique,
         );
       } else if (command.type === CommandType.ClearFormat) {
+        const inputSelection = mapSel(command.selection);
         const editInline = toggleInlineStyle(
           newEditorCtrl,
           inputSelection,
@@ -6447,6 +6644,7 @@ function ReactEditor({
           makeId,
         };
       } else if (command.type === CommandType.DeleteBackwardKey) {
+        const inputSelection = mapSel(command.selection);
         if (!isCollapsed(inputSelection)) {
           return;
         }
@@ -6474,7 +6672,6 @@ function ReactEditor({
               style.type === ParagraphStyleType.BulletList ||
               style.type === ParagraphStyleType.NumberedList ||
               style.type === ParagraphStyleType.BlockQuote ||
-              style.hangingIndent ||
               style.indentLevel ||
               (style.align && style.align !== TextAlign.Left)
             ) {
@@ -6501,24 +6698,6 @@ function ReactEditor({
                           para.children,
                           para.id,
                           omit(para.style, ['type']),
-                        );
-                      }
-                      if (style.hangingIndent) {
-                        return makeParagraph(
-                          para.children,
-                          omit(
-                            para.style as Exclude<
-                              ParagraphStyle,
-                              {
-                                type:
-                                  | ParagraphStyleType.BulletList
-                                  | ParagraphStyleType.NumberedList
-                                  | ParagraphStyleType.BlockQuote;
-                              }
-                            >,
-                            ['hangingIndent'],
-                          ),
-                          para.id,
                         );
                       }
                       if (style.indentLevel) {
@@ -6592,6 +6771,7 @@ function ReactEditor({
           }
         }
       } else if (command.type === CommandType.SpaceKey) {
+        const inputSelection = mapSel(command.selection);
         if (!isCollapsed(inputSelection)) {
           return;
         }
@@ -6617,7 +6797,6 @@ function ReactEditor({
             const { style } = para;
             if (
               style.type === ParagraphStyleType.Default &&
-              !style.hangingIndent &&
               !style.indentLevel &&
               para.children.length === 1 &&
               ['*', '1.'].includes(para.children[0].text)
@@ -6671,7 +6850,7 @@ function ReactEditor({
             {
               type: CommandType.Input,
               inputType: 'insertText',
-              selection: originalSelection,
+              selection: command.selection,
               data: {
                 type: DataTransferType.Plain,
                 text: ' ',
@@ -6697,6 +6876,7 @@ function ReactEditor({
           }
         }
       } else if (command.type === CommandType.Selection) {
+        const inputSelection = mapSel(command.selection!);
         if (command.doNotUpdateSelection && i === queue.length - 1) {
           setNewSelection = false;
         }
@@ -7114,20 +7294,27 @@ function ReactEditor({
   const onKeyDown = useCallback(
     (event: KeyboardEvent) => {
       const curSelection = window.getSelection();
-      if (!curSelection || !isFocused()) {
-        return;
+      const hasSel = curSelection && isFocused();
+      if (
+        hasSel &&
+        allPass([hasControlKey, not(hasShiftKey), hasKeyCode(186)])(event)
+      ) {
+        console.log(editorCtrl.current);
       }
-      const sel = findSelection(
-        editorCtrl.current.value,
-        curSelection.getRangeAt(0),
-        isSelectionBackwards(curSelection),
-      );
+      const sel = hasSel
+        ? findSelection(
+            editorCtrl.current.value,
+            curSelection.getRangeAt(0),
+            isSelectionBackwards(curSelection),
+          )
+        : null;
       const cmdKV = Object.entries(cmds);
       for (let i = 0; i < cmdKV.length; i++) {
         const [_name, cmd] = cmdKV[i];
         if (cmd.isKey(event)) {
           if (
-            cmd === cmds['delete backward']
+            sel &&
+            (cmd === cmds['delete backward']
               ? sel.editorId === editorCtrl.current.value.id &&
                 isCollapsed(sel) &&
                 (sel as BlockSelection).start.type ===
@@ -7135,7 +7322,7 @@ function ReactEditor({
                 (sel as BlockSelection).start.blockId ===
                   editorCtrl.current.value.blocks[0].id &&
                 ((sel as BlockSelection).start as ParagraphPoint).offset === 0
-              : cmd !== cmds['space']
+              : cmd !== cmds['space'])
           ) {
             event.preventDefault();
           }
@@ -7216,15 +7403,9 @@ function ReactEditor({
           const { indentLevel = 0, listId } = block.style;
           const blockId = block.id;
           const key = JSON.stringify({ indentLevel, listId });
-          const hasHigherIndent = range(indentLevel + 1, MAX_INDENT).some(
-            (iL) =>
-              JSON.stringify({ indentLevel: iL, listId }) in listIdToCount,
-          );
-          if (hasHigherIndent) {
-            range(indentLevel + 1, MAX_INDENT).forEach((iL) => {
-              delete listIdToCount[JSON.stringify({ indentLevel: iL, listId })];
-            });
-          }
+          range(indentLevel + 1, MAX_INDENT).forEach((iL) => {
+            delete listIdToCount[JSON.stringify({ indentLevel: iL, listId })];
+          });
           let listIdx: number;
           if (key in listIdToCount) {
             listIdx = listIdToCount[key]++;
@@ -7565,13 +7746,7 @@ function ItalicIcon(props: ToolbarIconProps): JSX.Element {
 
 function UnderlineIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 12 14"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 12 14" {...props}>
       <path d="M0.375 1.742q-0.289-0.016-0.352-0.031l-0.023-0.688q0.102-0.008 0.312-0.008 0.469 0 0.875 0.031 1.031 0.055 1.297 0.055 0.672 0 1.313-0.023 0.906-0.031 1.141-0.039 0.438 0 0.672-0.016l-0.008 0.109 0.016 0.5v0.070q-0.469 0.070-0.969 0.070-0.469 0-0.617 0.195-0.102 0.109-0.102 1.031 0 0.102 0.004 0.254t0.004 0.199l0.008 1.789 0.109 2.188q0.047 0.969 0.398 1.578 0.273 0.461 0.75 0.719 0.688 0.367 1.383 0.367 0.813 0 1.492-0.219 0.438-0.141 0.773-0.398 0.375-0.281 0.508-0.5 0.281-0.438 0.414-0.891 0.164-0.57 0.164-1.789 0-0.617-0.027-1t-0.086-0.957-0.105-1.246l-0.031-0.461q-0.039-0.523-0.187-0.688-0.266-0.273-0.602-0.266l-0.781 0.016-0.109-0.023 0.016-0.672h0.656l1.602 0.078q0.594 0.023 1.531-0.078l0.141 0.016q0.047 0.297 0.047 0.398 0 0.055-0.031 0.242-0.352 0.094-0.656 0.102-0.57 0.086-0.617 0.133-0.117 0.117-0.117 0.32 0 0.055 0.012 0.211t0.012 0.242q0.062 0.148 0.172 3.094 0.047 1.523-0.117 2.375-0.117 0.594-0.32 0.953-0.297 0.508-0.875 0.961-0.586 0.445-1.422 0.695-0.852 0.258-1.992 0.258-1.305 0-2.219-0.359-0.93-0.367-1.398-0.953-0.477-0.594-0.648-1.523-0.125-0.625-0.125-1.852v-2.602q0-1.469-0.133-1.664-0.195-0.281-1.148-0.305zM12 12.75v-0.5q0-0.109-0.070-0.18t-0.18-0.070h-11.5q-0.109 0-0.18 0.070t-0.070 0.18v0.5q0 0.109 0.070 0.18t0.18 0.070h11.5q0.109 0 0.18-0.070t0.070-0.18z" />
     </ToolbarIcon>
   );
@@ -7579,13 +7754,7 @@ function UnderlineIcon(props: ToolbarIconProps): JSX.Element {
 
 function InlineCodeIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 640 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 640 512" {...props}>
       <path d="M392.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6zm80.6 120.1c-12.5 12.5-12.5 32.8 0 45.3L562.7 256l-89.4 89.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l112-112c12.5-12.5 12.5-32.8 0-45.3l-112-112c-12.5-12.5-32.8-12.5-45.3 0zm-306.7 0c-12.5-12.5-32.8-12.5-45.3 0l-112 112c-12.5 12.5-12.5 32.8 0 45.3l112 112c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256l89.4-89.4c12.5-12.5 12.5-32.8 0-45.3z" />
     </ToolbarIcon>
   );
@@ -7593,13 +7762,7 @@ function InlineCodeIcon(props: ToolbarIconProps): JSX.Element {
 
 function StrikethroughIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 512 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 512 512" {...props}>
       <path
         xmlns="http://www.w3.org/2000/svg"
         d="M161.3 144c3.2-17.2 14-30.1 33.7-38.6c21.1-9 51.8-12.3 88.6-6.5c11.9 1.9 48.8 9.1 60.1 12c17.1 4.5 34.6-5.6 39.2-22.7s-5.6-34.6-22.7-39.2c-14.3-3.8-53.6-11.4-66.6-13.4c-44.7-7-88.3-4.2-123.7 10.9c-36.5 15.6-64.4 44.8-71.8 87.3c-.1 .6-.2 1.1-.2 1.7c-2.8 23.9 .5 45.6 10.1 64.6c4.5 9 10.2 16.9 16.7 23.9H32c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H270.1c-.1 0-.3-.1-.4-.1l-1.1-.3c-36-10.8-65.2-19.6-85.2-33.1c-9.3-6.3-15-12.6-18.2-19.1c-3.1-6.1-5.2-14.6-3.8-27.4zM348.9 337.2c2.7 6.5 4.4 15.8 1.9 30.1c-3 17.6-13.8 30.8-33.9 39.4c-21.1 9-51.7 12.3-88.5 6.5c-18-2.9-49.1-13.5-74.4-22.1c-5.6-1.9-11-3.7-15.9-5.4c-16.8-5.6-34.9 3.5-40.5 20.3s3.5 34.9 20.3 40.5c3.6 1.2 7.9 2.7 12.7 4.3l0 0 0 0c24.9 8.5 63.6 21.7 87.6 25.6l0 0 .2 0c44.7 7 88.3 4.2 123.7-10.9c36.5-15.6 64.4-44.8 71.8-87.3c3.6-21 2.7-40.4-3.1-58.1H335.1c7 5.6 11.4 11.2 13.9 17.2z"
@@ -7610,13 +7773,7 @@ function StrikethroughIcon(props: ToolbarIconProps): JSX.Element {
 
 function SuperscriptIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 512 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 512 512" {...props}>
       <path d="M480 32c0-11.1-5.7-21.4-15.2-27.2s-21.2-6.4-31.1-1.4l-32 16c-15.8 7.9-22.2 27.1-14.3 42.9C393 73.5 404.3 80 416 80v80c-17.7 0-32 14.3-32 32s14.3 32 32 32h32 32c17.7 0 32-14.3 32-32s-14.3-32-32-32V32zM32 64C14.3 64 0 78.3 0 96s14.3 32 32 32H47.3l89.6 128L47.3 384H32c-17.7 0-32 14.3-32 32s14.3 32 32 32H64c10.4 0 20.2-5.1 26.2-13.6L176 311.8l85.8 122.6c6 8.6 15.8 13.6 26.2 13.6h32c17.7 0 32-14.3 32-32s-14.3-32-32-32H304.7L215.1 256l89.6-128H320c17.7 0 32-14.3 32-32s-14.3-32-32-32H288c-10.4 0-20.2 5.1-26.2 13.6L176 200.2 90.2 77.6C84.2 69.1 74.4 64 64 64H32z" />
     </ToolbarIcon>
   );
@@ -7624,13 +7781,7 @@ function SuperscriptIcon(props: ToolbarIconProps): JSX.Element {
 
 function SubscriptIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 512 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 512 512" {...props}>
       <path d="M32 64C14.3 64 0 78.3 0 96s14.3 32 32 32H47.3l89.6 128L47.3 384H32c-17.7 0-32 14.3-32 32s14.3 32 32 32H64c10.4 0 20.2-5.1 26.2-13.6L176 311.8l85.8 122.6c6 8.6 15.8 13.6 26.2 13.6h32c17.7 0 32-14.3 32-32s-14.3-32-32-32H304.7L215.1 256l89.6-128H320c17.7 0 32-14.3 32-32s-14.3-32-32-32H288c-10.4 0-20.2 5.1-26.2 13.6L176 200.2 90.2 77.6C84.2 69.1 74.4 64 64 64H32zM480 320c0-11.1-5.7-21.4-15.2-27.2s-21.2-6.4-31.1-1.4l-32 16c-15.8 7.9-22.2 27.1-14.3 42.9C393 361.5 404.3 368 416 368v80c-17.7 0-32 14.3-32 32s14.3 32 32 32h32 32c17.7 0 32-14.3 32-32s-14.3-32-32-32V320z" />
     </ToolbarIcon>
   );
@@ -7638,13 +7789,7 @@ function SubscriptIcon(props: ToolbarIconProps): JSX.Element {
 
 function Heading1Icon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 384 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 384 512" {...props}>
       <path d="M32 32C14.3 32 0 46.3 0 64S14.3 96 32 96H160V448c0 17.7 14.3 32 32 32s32-14.3 32-32V96H352c17.7 0 32-14.3 32-32s-14.3-32-32-32H192 32z" />
     </ToolbarIcon>
   );
@@ -7653,9 +7798,6 @@ function Heading1Icon(props: ToolbarIconProps): JSX.Element {
 function Heading2Icon(props: ToolbarIconProps): JSX.Element {
   return (
     <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
       viewBox="0 0 16 16"
       style={{
         width: '1.35em',
@@ -7673,9 +7815,6 @@ function Heading2Icon(props: ToolbarIconProps): JSX.Element {
 function Heading3Icon(props: ToolbarIconProps): JSX.Element {
   return (
     <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
       viewBox="0 0 16 16"
       style={{
         width: '1.35em',
@@ -7692,9 +7831,6 @@ function Heading3Icon(props: ToolbarIconProps): JSX.Element {
 function Heading4Icon(props: ToolbarIconProps): JSX.Element {
   return (
     <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
       viewBox="0 0 16 16"
       style={{
         width: '1.35em',
@@ -7711,26 +7847,22 @@ function Heading4Icon(props: ToolbarIconProps): JSX.Element {
 function CodeBlockIcon(props: ToolbarIconProps): JSX.Element {
   return (
     <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 640 512"
+      viewBox="0 96 960 960"
+      style={{
+        width: '1.25em',
+        height: '1.25em',
+        paddingTop: '.45em',
+      }}
       {...props}
     >
-      <path d="M392.8 1.2c-17-4.9-34.7 5-39.6 22l-128 448c-4.9 17 5 34.7 22 39.6s34.7-5 39.6-22l128-448c4.9-17-5-34.7-22-39.6zm80.6 120.1c-12.5 12.5-12.5 32.8 0 45.3L562.7 256l-89.4 89.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0l112-112c12.5-12.5 12.5-32.8 0-45.3l-112-112c-12.5-12.5-32.8-12.5-45.3 0zm-306.7 0c-12.5-12.5-32.8-12.5-45.3 0l-112 112c-12.5 12.5-12.5 32.8 0 45.3l112 112c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L77.3 256l89.4-89.4c12.5-12.5 12.5-32.8 0-45.3z" />
+      <path d="M600 896v-60h140V316H600v-60h200v640H600Zm-440 0V256h200v60H220v520h140v60H160Z" />
     </ToolbarIcon>
   );
 }
 
 function BlockQuoteIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 448 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 448 512" {...props}>
       <path d="M448 296c0 66.3-53.7 120-120 120h-8c-17.7 0-32-14.3-32-32s14.3-32 32-32h8c30.9 0 56-25.1 56-56v-8H320c-35.3 0-64-28.7-64-64V160c0-35.3 28.7-64 64-64h64c35.3 0 64 28.7 64 64v32 32 72zm-256 0c0 66.3-53.7 120-120 120H64c-17.7 0-32-14.3-32-32s14.3-32 32-32h8c30.9 0 56-25.1 56-56v-8H64c-35.3 0-64-28.7-64-64V160c0-35.3 28.7-64 64-64h64c35.3 0 64 28.7 64 64v32 32 72z" />
     </ToolbarIcon>
   );
@@ -7738,13 +7870,7 @@ function BlockQuoteIcon(props: ToolbarIconProps): JSX.Element {
 
 function BulletListIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 512 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 512 512" {...props}>
       <path d="M40 48C26.7 48 16 58.7 16 72v48c0 13.3 10.7 24 24 24H88c13.3 0 24-10.7 24-24V72c0-13.3-10.7-24-24-24H40zM192 64c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H192zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H192zm0 160c-17.7 0-32 14.3-32 32s14.3 32 32 32H480c17.7 0 32-14.3 32-32s-14.3-32-32-32H192zM16 232v48c0 13.3 10.7 24 24 24H88c13.3 0 24-10.7 24-24V232c0-13.3-10.7-24-24-24H40c-13.3 0-24 10.7-24 24zM40 368c-13.3 0-24 10.7-24 24v48c0 13.3 10.7 24 24 24H88c13.3 0 24-10.7 24-24V392c0-13.3-10.7-24-24-24H40z" />
     </ToolbarIcon>
   );
@@ -7752,13 +7878,7 @@ function BulletListIcon(props: ToolbarIconProps): JSX.Element {
 
 function NumberedListIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 215 197"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 215 197" {...props}>
       <g
         xmlns="http://www.w3.org/2000/svg"
         transform="translate(0.000000,197.000000) scale(0.100000,-0.100000)"
@@ -7777,13 +7897,7 @@ function NumberedListIcon(props: ToolbarIconProps): JSX.Element {
 
 function UndoIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 512 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 512 512" {...props}>
       <path d="M212.333 224.333H12c-6.627 0-12-5.373-12-12V12C0 5.373 5.373 0 12 0h48c6.627 0 12 5.373 12 12v78.112C117.773 39.279 184.26 7.47 258.175 8.007c136.906.994 246.448 111.623 246.157 248.532C504.041 393.258 393.12 504 256.333 504c-64.089 0-122.496-24.313-166.51-64.215-5.099-4.622-5.334-12.554-.467-17.42l33.967-33.967c4.474-4.474 11.662-4.717 16.401-.525C170.76 415.336 211.58 432 256.333 432c97.268 0 176-78.716 176-176 0-97.267-78.716-176-176-176-58.496 0-110.28 28.476-142.274 72.333h98.274c6.627 0 12 5.373 12 12v48c0 6.627-5.373 12-12 12z" />
     </ToolbarIcon>
   );
@@ -7791,13 +7905,7 @@ function UndoIcon(props: ToolbarIconProps): JSX.Element {
 
 function RedoIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 512 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 512 512" {...props}>
       <path d="M447.5 224H456c13.3 0 24-10.7 24-24V72c0-9.7-5.8-18.5-14.8-22.2s-19.3-1.7-26.2 5.2L397.4 96.6c-87.6-86.5-228.7-86.2-315.8 1c-87.5 87.5-87.5 229.3 0 316.8s229.3 87.5 316.8 0c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0c-62.5 62.5-163.8 62.5-226.3 0s-62.5-163.8 0-226.3c62.2-62.2 162.7-62.5 225.3-1L311 183c-6.9 6.9-8.9 17.2-5.2 26.2s12.5 14.8 22.2 14.8H447.5z" />
     </ToolbarIcon>
   );
@@ -7805,13 +7913,7 @@ function RedoIcon(props: ToolbarIconProps): JSX.Element {
 
 function IndentIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 448 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 448 512" {...props}>
       <path d="M0 64C0 46.3 14.3 32 32 32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32C14.3 96 0 81.7 0 64zM192 192c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H224c-17.7 0-32-14.3-32-32zm32 96H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H224c-17.7 0-32-14.3-32-32s14.3-32 32-32zM0 448c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM127.8 268.6L25.8 347.9C15.3 356.1 0 348.6 0 335.3V176.7c0-13.3 15.3-20.8 25.8-12.6l101.9 79.3c8.2 6.4 8.2 18.9 0 25.3z" />
     </ToolbarIcon>
   );
@@ -7819,13 +7921,7 @@ function IndentIcon(props: ToolbarIconProps): JSX.Element {
 
 function DedentIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 512 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 512 512" {...props}>
       <path d="M6 64C6 46.3 20.3 32 38 32H422c17.7 0 32 14.3 32 32s-14.3 32-32 32H38C20.3 96 6 81.7 6 64zM198 192c0-17.7 14.3-32 32-32H422c17.7 0 32 14.3 32 32s-14.3 32-32 32H230c-17.7 0-32-14.3-32-32zm32 96H422c17.7 0 32 14.3 32 32s-14.3 32-32 32H230c-17.7 0-32-14.3-32-32s14.3-32 32-32zM6 448c0-17.7 14.3-32 32-32H422c17.7 0 32 14.3 32 32s-14.3 32-32 32H38c-17.7 0-32-14.3-32-32zm.2-179.4c-8.2-6.4-8.2-18.9 0-25.3l101.9-79.3c10.5-8.2 25.8-.7 25.8 12.6V335.3c0 13.3-15.3 20.8-25.8 12.6L6.2 268.6z" />
     </ToolbarIcon>
   );
@@ -7833,13 +7929,7 @@ function DedentIcon(props: ToolbarIconProps): JSX.Element {
 
 function AlignLeftIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 448 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 448 512" {...props}>
       <path d="M288 64c0 17.7-14.3 32-32 32H32C14.3 96 0 81.7 0 64S14.3 32 32 32H256c17.7 0 32 14.3 32 32zm0 256c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H256c17.7 0 32 14.3 32 32zM0 192c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 448c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z" />
     </ToolbarIcon>
   );
@@ -7847,13 +7937,7 @@ function AlignLeftIcon(props: ToolbarIconProps): JSX.Element {
 
 function AlignCenterIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 448 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 448 512" {...props}>
       <path d="M352 64c0-17.7-14.3-32-32-32H128c-17.7 0-32 14.3-32 32s14.3 32 32 32H320c17.7 0 32-14.3 32-32zm96 128c0-17.7-14.3-32-32-32H32c-17.7 0-32 14.3-32 32s14.3 32 32 32H416c17.7 0 32-14.3 32-32zM0 448c0 17.7 14.3 32 32 32H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H32c-17.7 0-32 14.3-32 32zM352 320c0-17.7-14.3-32-32-32H128c-17.7 0-32 14.3-32 32s14.3 32 32 32H320c17.7 0 32-14.3 32-32z" />
     </ToolbarIcon>
   );
@@ -7861,14 +7945,16 @@ function AlignCenterIcon(props: ToolbarIconProps): JSX.Element {
 
 function AlignRightIcon(props: ToolbarIconProps): JSX.Element {
   return (
-    <ToolbarIcon
-      version="1.1"
-      width="12"
-      height="14"
-      viewBox="0 0 448 512"
-      {...props}
-    >
+    <ToolbarIcon viewBox="0 0 448 512" {...props}>
       <path d="M448 64c0 17.7-14.3 32-32 32H192c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32zm0 256c0 17.7-14.3 32-32 32H192c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32zM0 192c0-17.7 14.3-32 32-32H416c17.7 0 32 14.3 32 32s-14.3 32-32 32H32c-17.7 0-32-14.3-32-32zM448 448c0 17.7-14.3 32-32 32H32c-17.7 0-32-14.3-32-32s14.3-32 32-32H416c17.7 0 32 14.3 32 32z" />
+    </ToolbarIcon>
+  );
+}
+
+function AlignJustifyIcon(props: ToolbarIconProps): JSX.Element {
+  return (
+    <ToolbarIcon viewBox="0 0 448 512" {...props}>
+      <path d="M448 64c0-17.7-14.3-32-32-32H32C14.3 32 0 46.3 0 64S14.3 96 32 96H416c17.7 0 32-14.3 32-32zm0 256c0-17.7-14.3-32-32-32H32c-17.7 0-32 14.3-32 32s14.3 32 32 32H416c17.7 0 32-14.3 32-32zM0 192c0 17.7 14.3 32 32 32H416c17.7 0 32-14.3 32-32s-14.3-32-32-32H32c-17.7 0-32 14.3-32 32zM448 448c0-17.7-14.3-32-32-32H32c-17.7 0-32 14.3-32 32s14.3 32 32 32H416c17.7 0 32-14.3 32-32z" />
     </ToolbarIcon>
   );
 }
