@@ -7262,6 +7262,10 @@ function ReactEditor({
 
   const onHTMLSelectionChange = useCallback(
     (eventOrForce: Event | true): void => {
+      if (isMouseDownRef.current === true) {
+        isMouseDownRef.current = 1;
+      }
+
       if (isUpdatingSelection.current > 0) {
         return;
       }
@@ -7459,7 +7463,7 @@ function ReactEditor({
     [queueCommand],
   );
 
-  const isMouseDownRef = useRef(false);
+  const isMouseDownRef = useRef<boolean | 1>(false);
 
   useEffect(() => {
     const editorElement = editorRef.current!;
@@ -7476,8 +7480,9 @@ function ReactEditor({
       isMouseDownRef.current = true;
     };
     const onMouseUp = () => {
+      const val = isMouseDownRef.current;
       isMouseDownRef.current = false;
-      if (editorCtrl.current.selection) {
+      if (val === 1 && editorCtrl.current.selection) {
         onHTMLSelectionChange(true);
       }
     };
