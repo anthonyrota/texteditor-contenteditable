@@ -3977,6 +3977,7 @@ function hasKeyCode(
 }
 
 const BACKSPACE = 8;
+const DELETE = 46;
 const SPACE = 32;
 const ONE = 49;
 const TWO = 50;
@@ -3985,10 +3986,12 @@ const FOUR = 52;
 const EIGHT = 56;
 const NINE = 57;
 const B = 66;
+const D = 68;
 const E = 69;
 const H = 72;
 const I = 73;
 const J = 74;
+const K = 75;
 const L = 76;
 const M = 77;
 const R = 82;
@@ -4007,13 +4010,22 @@ const isAlignRight = allPass([hasControlKey, hasKeyCode(R)]);
 const isAlignJustify = allPass([hasControlKey, hasKeyCode(J)]);
 const isIndent = allPass([hasControlKey, not(hasShiftKey), hasKeyCode(M)]);
 const isOutdent = allPass([hasControlKey, hasShiftKey, hasKeyCode(M)]);
-const isDeleteBackward = anyPass([
+const isAnyDeleteBackward = anyPass([
   allPass([
     (event: CompatibleKeyboardEvent) =>
       !isApple || !event.ctrlKey || event.altKey,
     hasKeyCode(BACKSPACE),
   ]),
   allPass([hasControlKey, not(hasShiftKey), hasKeyCode(H)]),
+]);
+const isAnyDeleteForward = anyPass([
+  allPass([
+    (event: CompatibleKeyboardEvent) =>
+      !isApple || !event.ctrlKey || event.altKey,
+    hasKeyCode(DELETE),
+  ]),
+  allPass([hasControlKey, not(hasShiftKey), hasKeyCode(D)]),
+  allPass([hasControlKey, not(hasShiftKey), hasKeyCode(K)]),
 ]);
 const isSpace = allPass([hasNoModifiers, hasKeyCode(SPACE)]);
 const isUndo = anyPass([
@@ -4633,6 +4645,7 @@ enum CommandType {
   Undo = 'Undo',
   Redo = 'Redo',
   DeleteBackwardKey = 'DeleteBackwardKey',
+  DeleteForwardKey = 'DeleteForwardKey',
   Selection = 'Selection',
   SpaceKey = 'Space',
 }
@@ -4666,6 +4679,7 @@ type Command =
       type:
         | CommandType.ClearFormat
         | CommandType.DeleteBackwardKey
+        | CommandType.DeleteForwardKey
         | CommandType.SpaceKey;
       selection: Selection;
       origin?: string;
@@ -5280,14 +5294,26 @@ const cmds = {
       },
     ],
   },
-  'delete backward': {
-    isKey: isDeleteBackward,
+  'any delete backward': {
+    isKey: isAnyDeleteBackward,
     getCmds: (selection) =>
       !selection
         ? []
         : [
             {
               type: CommandType.DeleteBackwardKey,
+              selection,
+            },
+          ],
+  },
+  'any delete forward': {
+    isKey: isAnyDeleteForward,
+    getCmds: (selection) =>
+      !selection
+        ? []
+        : [
+            {
+              type: CommandType.DeleteForwardKey,
               selection,
             },
           ],
@@ -6746,9 +6772,50 @@ function ReactEditor({
           lastAction: PushStateAction.Unique,
           makeId,
         };
-      } else if (command.type === CommandType.DeleteBackwardKey) {
+      } else if (
+        command.type === CommandType.DeleteBackwardKey ||
+        command.type === CommandType.DeleteForwardKey
+      ) {
         const inputSelection = mapSel(command.selection);
-        if (!isCollapsed(inputSelection)) {
+        if (
+          inputSelection.type === SelectionType.Block &&
+          inputSelection.start.blockId === inputSelection.end.blockId &&
+          inputSelection.start.type === BlockSelectionPointType.OtherBlock
+        ) {
+          processCommand(
+            {
+              type: CommandType.Input,
+              inputType:
+                command.type === CommandType.DeleteBackwardKey
+                  ? 'deleteContentBackward'
+                  : 'deleteContentForward',
+              selection: inputSelection,
+            },
+            null,
+          );
+          if (i !== null && i < queue.length - 1) {
+            const next = queue[i + 1];
+            if (
+              next.type === CommandType.Input &&
+              (command.type === CommandType.DeleteBackwardKey
+                ? next.inputType === 'deleteContentBackward' ||
+                  next.inputType === 'deleteWordBackward' ||
+                  next.inputType === 'deleteSoftLineBackward' ||
+                  next.inputType === 'deleteHardLineBackward'
+                : command.type === CommandType.DeleteForwardKey &&
+                  (next.inputType === 'deleteContentForward' ||
+                    next.inputType === 'deleteWordForward' ||
+                    next.inputType === 'deleteSoftLineForward' ||
+                    next.inputType === 'deleteHardLineForward'))
+            ) {
+              ignoreNext = true;
+            }
+          }
+        }
+        if (
+          command.type === CommandType.DeleteForwardKey ||
+          !isCollapsed(inputSelection)
+        ) {
           return;
         }
         const point = (inputSelection as BlockSelection).start;
@@ -6759,7 +6826,7 @@ function ReactEditor({
           return;
         }
         const res = walkEditorValues<boolean | undefined>(
-          editorCtrl.current.value,
+          newEditorCtrl.value,
           (subValue, _data, _ids) => {
             if (subValue.id !== inputSelection.editorId) {
               return {
@@ -6886,7 +6953,7 @@ function ReactEditor({
           return;
         }
         const res = walkEditorValues<boolean | undefined>(
-          editorCtrl.current.value,
+          newEditorCtrl.value,
           (subValue, _data, _ids) => {
             if (subValue.id !== inputSelection.editorId) {
               return {
@@ -7054,9 +7121,10 @@ function ReactEditor({
 
   const queueCommand = useCallback(
     (command: Command): void => {
-      function isBatch(cmd: Command): boolean {
+      function shouldBatchWithNext(cmd: Command): boolean {
         return (
           cmd.type === CommandType.DeleteBackwardKey ||
+          cmd.type === CommandType.DeleteForwardKey ||
           cmd.type === CommandType.SpaceKey ||
           (cmd.type === CommandType.InlineFormat &&
             (
@@ -7073,7 +7141,7 @@ function ReactEditor({
         );
       }
       if (inputQueueRef.current.length === 0) {
-        if (!isBatch(command)) {
+        if (!shouldBatchWithNext(command)) {
           inputQueueRef.current.push(command);
           flushInputQueue();
           return;
@@ -7085,7 +7153,7 @@ function ReactEditor({
       } else {
         const lastCommand =
           inputQueueRef.current[inputQueueRef.current.length - 1];
-        if (isBatch(lastCommand)) {
+        if (shouldBatchWithNext(lastCommand)) {
           if (inputQueueRequestRef.current !== null) {
             window.clearTimeout(inputQueueRequestRef.current!);
           }
@@ -7441,7 +7509,7 @@ function ReactEditor({
         if (cmd.isKey(event)) {
           if (
             sel &&
-            (cmd === cmds['delete backward']
+            (cmd === cmds['any delete backward']
               ? sel.editorId === editorCtrl.current.value.id &&
                 isCollapsed(sel) &&
                 (sel as BlockSelection).start.type ===
