@@ -213,13 +213,28 @@ i {
   bottom: -1.25em;
 }
 
-.toolbar {
+.toolbar-container {
   position: sticky;
+  top: 0px;
+  height: 60px;
+  width: 100%;
+  z-index: 999;
+}
+
+.toolbar {
+  position: absolute;
+  left: 0px;
+  right: 0px;
   background-color: #fff;
   top: 0;
   border-bottom: 2px solid #eee;
   padding: 0.4em 0;
-  z-index: 999;
+
+  &--down {
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 500ms;
+  }
 }
 
 .toolbarIcon {
@@ -237,12 +252,12 @@ i {
 }
 
 .focusedToolbarIcon {
-  background-color: #f9f9f9;
+  background-color: #dadada;
 }
 
 .activeToolbarIcon {
   fill: #000;
-  background-color: #ddd;
+  background-color: #ccc;
   outline: 0;
 }
 

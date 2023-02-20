@@ -4860,26 +4860,47 @@ const cmds = {
   'code block': {
     isKey: isHeading1,
     icon: {
-      isActive: (c) => false,
+      isActive: (c) => {
+        const frag = extractSelection(c.value, c.selection!);
+        return frag.blocks.every((block) => block.type === BlockNodeType.Code);
+      },
       Icon: CodeBlockIcon,
     },
-    getCmds: (selection, makeId) =>
-      !selection || !isCollapsed(selection)
-        ? []
-        : [
-            {
-              type: CommandType.Input,
-              selection,
-              inputType: 'insertText',
-              data: {
-                type: DataTransferType.Rich,
-                value: makeEditorValue(
-                  [makeCodeBlock('', CodeBlockLanguage.PlainText, makeId())],
-                  makeId(),
-                ),
-              },
-            },
-          ],
+    getCmds: (selection, makeId) => {
+      if (!selection || !isCollapsed(selection)) {
+        return [];
+      }
+      const codeBlockId = makeId();
+      const insertFrag = makeEditorValue(
+        [makeCodeBlock('', CodeBlockLanguage.PlainText, codeBlockId)],
+        makeId(),
+      );
+      const blockPoint: BlockPoint = {
+        type: BlockSelectionPointType.OtherBlock,
+        blockId: codeBlockId,
+      };
+      return [
+        {
+          type: CommandType.Input,
+          selection,
+          inputType: 'insertText',
+          data: {
+            type: DataTransferType.Rich,
+            value: insertFrag,
+          },
+        },
+        {
+          type: CommandType.Selection,
+          selection: {
+            type: SelectionType.Block,
+            editorId: selection.editorId,
+            start: blockPoint,
+            end: blockPoint,
+          },
+          mergeLast: true,
+        },
+      ];
+    },
   },
   'heading 1': {
     isKey: isHeading1,
@@ -7605,51 +7626,116 @@ function ReactEditor({
     },
   );
   const placeholderRef = useRef<HTMLDivElement | null>(null);
+  // https://www.codemzy.com/blog/sticky-fixed-header-ios-keyboard-fix
+  const [toolbarMarginTop, setToolbarMarginTop] = useState(0);
+  const toolbarContainerRef = useRef<HTMLDivElement | null>(null);
+  const setMargin = useCallback((): void => {
+    if (!toolbarContainerRef.current) {
+      return;
+    }
+    const newPosition = toolbarContainerRef.current.getBoundingClientRect().top;
+    if (newPosition < -1) {
+      let fixPosition = Math.abs(newPosition);
+      if (
+        window.innerHeight + window.pageYOffset >=
+        document.body.offsetHeight
+      ) {
+        fixPosition -= 2;
+      }
+      setToolbarMarginTop(fixPosition);
+    }
+  }, []);
+  function debounceLeading(
+    func: () => void,
+    timeout: number,
+  ): { fn: () => void; cancel: () => void } {
+    let timer: number | null;
+    return {
+      fn: (): void => {
+        if (timer !== null) {
+          clearTimeout(timer);
+        }
+        timer = window.setTimeout(() => {
+          func();
+        }, timeout);
+      },
+      cancel: (): void => {
+        if (timer !== null) {
+          clearTimeout(timer);
+        }
+      },
+    };
+  }
+  const debouncedMargin = useMemo(
+    () => debounceLeading(setMargin, 150),
+    [setMargin],
+  );
+  const showToolbar = useCallback((): void => {
+    if (!isFocused() || toolbarMarginTop > 0) {
+      setToolbarMarginTop(0);
+    }
+    debouncedMargin.fn();
+  }, [debouncedMargin, toolbarMarginTop]);
+  useEffect(() => {
+    window.addEventListener('scroll', showToolbar);
+    return () => {
+      debouncedMargin.cancel();
+      window.removeEventListener('scroll', showToolbar);
+    };
+  }, [debouncedMargin, showToolbar]);
   return (
     <>
-      <div
-        className="toolbar page__inner-container"
-        onMouseDown={onEditorToolbarMouseDown}
-      >
-        <div className="page__inner">
-          {Object.entries(cmds)
-            .filter(
-              (
-                a,
-              ): a is [
-                string,
-                Extract<(typeof cmds)[keyof typeof cmds], { icon: object }>,
-              ] => 'icon' in a[1] && a[1].icon !== undefined,
-            )
-            .map(([name, cmd]) => {
-              const isActive = editorCtrl.current.selection
-                ? cmd.icon.isActive(editorCtrl.current)
-                : false;
-              const Icon = cmd.icon.Icon;
-              const handle = () => {
-                if (editorCtrl.current.selection) {
-                  cmd
-                    .getCmds(
-                      editorCtrl.current.selection,
-                      editorCtrl.current.makeId,
-                    )
-                    .forEach((command) => {
-                      queueCommand(command);
-                    });
-                }
-              };
-              return (
-                <Tooltip info={name} key={name}>
-                  {({ focused }) => (
-                    <Icon
-                      onMouseDown={handle}
-                      isActive={isActive}
-                      isFocused={focused}
-                    />
-                  )}
-                </Tooltip>
-              );
-            })}
+      <div className="toolbar-container" ref={toolbarContainerRef}>
+        <div
+          className={[
+            'toolbar page__inner-container',
+            toolbarMarginTop !== 0 && 'toolbar--down',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          style={{ marginTop: toolbarMarginTop + 'px' }}
+          onMouseDown={onEditorToolbarMouseDown}
+        >
+          <div className="page__inner">
+            {Object.entries(cmds)
+              .filter(
+                (
+                  a,
+                ): a is [
+                  string,
+                  Extract<(typeof cmds)[keyof typeof cmds], { icon: object }>,
+                ] => 'icon' in a[1] && a[1].icon !== undefined,
+              )
+              .map(([name, cmd]) => {
+                const isActive = editorCtrl.current.selection
+                  ? cmd.icon.isActive(editorCtrl.current)
+                  : false;
+                const Icon = cmd.icon.Icon;
+                const handle = () => {
+                  if (editorCtrl.current.selection) {
+                    cmd
+                      .getCmds(
+                        editorCtrl.current.selection,
+                        editorCtrl.current.makeId,
+                      )
+                      .forEach((command) => {
+                        queueCommand(command);
+                      });
+                  }
+                };
+                return (
+                  <Tooltip info={name} key={name}>
+                    {({ focused }) => (
+                      <Icon
+                        onMouseDown={handle}
+                        isActive={isActive}
+                        isFocused={focused}
+                      />
+                    )}
+                  </Tooltip>
+                );
+              })}
+          </div>
         </div>
       </div>
       <div className="page__inner-container">
@@ -7659,6 +7745,10 @@ function ReactEditor({
             suppressContentEditableWarning
             ref={editorRef}
             className="editor"
+            onBlur={() => {
+              debouncedMargin.cancel();
+              setToolbarMarginTop(0);
+            }}
           >
             {isClient && hasPlaceholder && (
               <div className="editor__placeholder" ref={placeholderRef}>
