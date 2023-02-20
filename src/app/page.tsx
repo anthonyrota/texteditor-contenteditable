@@ -5905,7 +5905,6 @@ function convertFromElToEditorValue(
         continue;
       }
       if (blockEl.tagName.toLowerCase() === 'table') {
-        console.log(blockEl);
         const rows: TableRow[] = [];
         let maxCols = 0;
         for (let i = 0; i < blockEl.childNodes.length; i++) {
@@ -7196,108 +7195,105 @@ function ReactEditor({
     };
   }, []);
 
-  const onHTMLSelectionChange = useCallback(
-    (event: Event): void => {
-      if (isUpdatingSelection.current > 0) {
-        return;
-      }
+  const onHTMLSelectionChange = useCallback((): void => {
+    if (isUpdatingSelection.current > 0) {
+      return;
+    }
 
-      const nativeSelection = window.getSelection()!;
+    const nativeSelection = window.getSelection()!;
 
-      if (
-        document.activeElement &&
-        editorRef.current!.contains(document.activeElement) &&
-        nativeSelection.anchorNode &&
-        closest(nativeSelection.anchorNode, '.monaco-editor')
-      ) {
-        const blockId = closest(
-          nativeSelection.anchorNode!,
-          `[data-type="${BlockNodeType.Code}"]`,
-        )!.getAttribute('data-id')!;
-        const editorId = closest(
-          nativeSelection.anchorNode!,
-          `[data-family="${EditorFamilyType.Editor}"]`,
-        )!.getAttribute('data-id')!;
-        queueCommand({
-          type: CommandType.Selection,
-          selection: {
-            type: SelectionType.Block,
-            editorId,
-            start: {
-              type: BlockSelectionPointType.OtherBlock,
-              blockId,
-            },
-            end: {
-              type: BlockSelectionPointType.OtherBlock,
-              blockId,
-            },
-          },
-          doNotUpdateSelection: true,
-          mergeLast: true,
-        });
-        return;
-      }
-
-      if (!isFocused() || nativeSelection.rangeCount === 0) {
-        queueCommand({
-          type: CommandType.Selection,
-          selection: null,
-        });
-        return;
-      }
-
-      if (
-        hasPlaceholder &&
-        placeholderRef.current &&
-        (nativeSelection.anchorNode === placeholderRef.current ||
-          nativeSelection.focusNode === placeholderRef.current ||
-          placeholderRef.current.contains(nativeSelection.anchorNode) ||
-          placeholderRef.current.contains(nativeSelection.focusNode))
-      ) {
-        const curSelection: Selection = {
+    if (
+      document.activeElement &&
+      editorRef.current!.contains(document.activeElement) &&
+      nativeSelection.anchorNode &&
+      closest(nativeSelection.anchorNode, '.monaco-editor')
+    ) {
+      const blockId = closest(
+        nativeSelection.anchorNode!,
+        `[data-type="${BlockNodeType.Code}"]`,
+      )!.getAttribute('data-id')!;
+      const editorId = closest(
+        nativeSelection.anchorNode!,
+        `[data-family="${EditorFamilyType.Editor}"]`,
+      )!.getAttribute('data-id')!;
+      queueCommand({
+        type: CommandType.Selection,
+        selection: {
           type: SelectionType.Block,
-          editorId: editorCtrl.current.value.id,
+          editorId,
           start: {
-            type: BlockSelectionPointType.Paragraph,
-            blockId: editorCtrl.current.value.blocks[0].id,
-            offset: 0,
+            type: BlockSelectionPointType.OtherBlock,
+            blockId,
           },
           end: {
-            type: BlockSelectionPointType.Paragraph,
-            blockId: editorCtrl.current.value.blocks[0].id,
-            offset: 0,
+            type: BlockSelectionPointType.OtherBlock,
+            blockId,
           },
-        };
-        queueCommand({
-          type: CommandType.Selection,
-          selection: curSelection,
-        });
-        return;
-      }
+        },
+        doNotUpdateSelection: true,
+        mergeLast: true,
+      });
+      return;
+    }
 
-      let curSelection: Selection;
-      try {
-        curSelection = findSelection(
-          editorCtrl.current.value,
-          nativeSelection.getRangeAt(0),
-          isSelectionBackwards(nativeSelection),
-        );
-      } catch (error) {
-        console.error(
-          'error finding selection',
-          document.activeElement,
-          nativeSelection.anchorNode,
-          nativeSelection.focusNode,
-        );
-        return;
-      }
+    if (!isFocused() || nativeSelection.rangeCount === 0) {
+      queueCommand({
+        type: CommandType.Selection,
+        selection: null,
+      });
+      return;
+    }
+
+    if (
+      hasPlaceholder &&
+      placeholderRef.current &&
+      (nativeSelection.anchorNode === placeholderRef.current ||
+        nativeSelection.focusNode === placeholderRef.current ||
+        placeholderRef.current.contains(nativeSelection.anchorNode) ||
+        placeholderRef.current.contains(nativeSelection.focusNode))
+    ) {
+      const curSelection: Selection = {
+        type: SelectionType.Block,
+        editorId: editorCtrl.current.value.id,
+        start: {
+          type: BlockSelectionPointType.Paragraph,
+          blockId: editorCtrl.current.value.blocks[0].id,
+          offset: 0,
+        },
+        end: {
+          type: BlockSelectionPointType.Paragraph,
+          blockId: editorCtrl.current.value.blocks[0].id,
+          offset: 0,
+        },
+      };
       queueCommand({
         type: CommandType.Selection,
         selection: curSelection,
       });
-    },
-    [hasPlaceholder, queueCommand],
-  );
+      return;
+    }
+
+    let curSelection: Selection;
+    try {
+      curSelection = findSelection(
+        editorCtrl.current.value,
+        nativeSelection.getRangeAt(0),
+        isSelectionBackwards(nativeSelection),
+      );
+    } catch (error) {
+      console.error(
+        'error finding selection',
+        document.activeElement,
+        nativeSelection.anchorNode,
+        nativeSelection.focusNode,
+      );
+      return;
+    }
+    queueCommand({
+      type: CommandType.Selection,
+      selection: curSelection,
+    });
+  }, [hasPlaceholder, queueCommand]);
 
   const onCopy = useCallback(
     (event: ClipboardEvent): void => {
@@ -7316,6 +7312,29 @@ function ReactEditor({
       event.preventDefault();
     },
     [copySelection],
+  );
+
+  const onCut = useCallback(
+    (event: ClipboardEvent): void => {
+      const nativeSelection = window.getSelection();
+      if (!nativeSelection || !isFocused()) {
+        return;
+      }
+      const curSelection = findSelection(
+        editorCtrl.current.value,
+        nativeSelection.getRangeAt(0),
+        isSelectionBackwards(nativeSelection),
+      );
+      if (!isCollapsed(curSelection)) {
+        queueCommand({
+          type: CommandType.Input,
+          inputType: 'deleteByCut',
+          selection: curSelection,
+        });
+      }
+      event.preventDefault();
+    },
+    [queueCommand],
   );
 
   const onKeyDown = useCallback(
@@ -7382,7 +7401,7 @@ function ReactEditor({
     const onMouseUp = () => {
       isMouseDownRef.current = false;
       if (editorCtrl.current.selection) {
-        updateSelection(editorCtrl.current.selection);
+        onHTMLSelectionChange();
       }
     };
     window.addEventListener('touchstart', stfuMonacoForBlockingScroll, true);
@@ -7392,6 +7411,7 @@ function ReactEditor({
     window.addEventListener('mouseup', onMouseUp);
     editorElement.addEventListener('beforeinput', onBeforeInput);
     editorElement.addEventListener('copy', onCopy);
+    editorElement.addEventListener('cut', onCut);
     editorElement.addEventListener('keydown', onKeyDown);
     return () => {
       window.document.removeEventListener(
@@ -7413,9 +7433,10 @@ function ReactEditor({
       window.addEventListener('mouseup', onMouseUp);
       editorElement.removeEventListener('beforeinput', onBeforeInput);
       editorElement.removeEventListener('copy', onCopy);
+      editorElement.removeEventListener('cut', onCut);
       editorElement.removeEventListener('keydown', onKeyDown);
     };
-  }, [onHTMLSelectionChange, onBeforeInput, onCopy, onKeyDown]);
+  }, [onHTMLSelectionChange, onBeforeInput, onCopy, onKeyDown, onCut]);
 
   function getListBlockIdToIdx(value: EditorValue): Record<string, number> {
     let listIdToCount: Record<string, number> = {};
