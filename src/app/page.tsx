@@ -3969,6 +3969,7 @@ const THREE = 51;
 const FOUR = 52;
 const EIGHT = 56;
 const NINE = 57;
+const A = 65;
 const B = 66;
 const D = 68;
 const E = 69;
@@ -4070,6 +4071,11 @@ const isClearFormatting = allPass([
   hasCommandModifier,
   not(hasShiftKey),
   hasKeyCode(BACKSLASH),
+]);
+const isSelectAll = allPass([
+  hasCommandModifier,
+  not(hasShiftKey),
+  hasKeyCode(A),
 ]);
 
 function anyBlockMatches(
@@ -4632,6 +4638,7 @@ enum CommandType {
   DeleteForwardKey = 'DeleteForwardKey',
   Selection = 'Selection',
   SpaceKey = 'Space',
+  SelectAll = 'SelectAll',
 }
 type Command =
   | {
@@ -4656,7 +4663,7 @@ type Command =
       origin?: string;
     }
   | {
-      type: CommandType.Redo | CommandType.Undo;
+      type: CommandType.Redo | CommandType.Undo | CommandType.SelectAll;
       origin?: string;
     }
   | {
@@ -4673,6 +4680,7 @@ type Command =
       selection: Selection | null;
       doNotUpdateSelection?: boolean;
       mergeLast?: boolean;
+      doNotScroll?: boolean;
       origin?: string;
     };
 const cmds = {
@@ -5313,6 +5321,11 @@ const cmds = {
               selection,
             },
           ],
+  },
+  'select all': {
+    isKey: isSelectAll,
+    getCmds: (selection) =>
+      !selection ? [] : [{ type: CommandType.SelectAll, selection }],
   },
 } satisfies {
   [name: string]: {
@@ -6236,7 +6249,10 @@ function ReactEditor({
   const isUpdatingSelection = useRef<number>(0);
   const inputQueueRef = useRef<Command[]>([]);
   const inputQueueRequestRef = useRef<number | null>(null);
-  let newDomSelectionRef = useRef<Selection | null>(null);
+  let newDomSelectionRef = useRef<{
+    sel: Selection | null;
+    doNotScroll?: boolean;
+  } | null>(null);
   const [_renderToggle, setRenderToggle] = useState(false);
 
   const updateSelection = (newSelection: Selection): void => {
@@ -6406,6 +6422,7 @@ function ReactEditor({
     let dropValue: EditorValue | null = null;
     let ignoreNext: boolean = false;
     let setNewSelection = true; // TODO fix.
+    let doNotScroll: boolean | undefined;
     function mapSel(sel: Selection): Selection {
       return mapSelectionFns.reduce(
         (selection, mapSelection) => mapSelection(selection, true),
@@ -7031,8 +7048,13 @@ function ReactEditor({
         }
       } else if (command.type === CommandType.Selection) {
         const inputSelection = mapSel(command.selection!);
-        if (command.doNotUpdateSelection && i === queue.length - 1) {
-          setNewSelection = false;
+        if (i === queue.length - 1) {
+          if (command.doNotUpdateSelection) {
+            setNewSelection = false;
+          }
+          if (command.doNotScroll) {
+            doNotScroll = true;
+          }
         }
         newEditorCtrl = pushState(
           newEditorCtrl,
@@ -7042,13 +7064,53 @@ function ReactEditor({
           PushStateAction.Selection,
           command.mergeLast,
         );
+      } else if (command.type === CommandType.SelectAll) {
+        const firstBlock = newEditorCtrl.value.blocks[0];
+        const lastBlock =
+          newEditorCtrl.value.blocks[newEditorCtrl.value.blocks.length - 1];
+        processCommand(
+          {
+            type: CommandType.Selection,
+            selection: {
+              type: SelectionType.Block,
+              editorId: newEditorCtrl.value.id,
+              start:
+                firstBlock.type === BlockNodeType.Paragraph
+                  ? {
+                      type: BlockSelectionPointType.Paragraph,
+                      blockId: firstBlock.id,
+                      offset: 0,
+                    }
+                  : {
+                      type: BlockSelectionPointType.OtherBlock,
+                      blockId: firstBlock.id,
+                    },
+              end:
+                lastBlock.type === BlockNodeType.Paragraph
+                  ? {
+                      type: BlockSelectionPointType.Paragraph,
+                      blockId: lastBlock.id,
+                      offset: getParagraphLength(lastBlock),
+                    }
+                  : {
+                      type: BlockSelectionPointType.OtherBlock,
+                      blockId: lastBlock.id,
+                    },
+            },
+            doNotScroll: true,
+          },
+          i,
+        );
       }
     }
     for (let i = 0; i < queue.length; i++) {
       processCommand(queue[i], i);
     }
     if (setNewSelection) {
-      newDomSelectionRef.current = newEditorCtrl.selection;
+      newDomSelectionRef.current = {
+        sel: newEditorCtrl.selection,
+        doNotScroll,
+      };
     }
     if (!newEditorCtrl.selection) {
       editorRef.current!.blur();
@@ -7065,7 +7127,11 @@ function ReactEditor({
     if (newDomSelectionRef.current !== null) {
       const sel = newDomSelectionRef.current;
       if (!isMouseDownRef.current) {
-        updateSelection(sel);
+        if (sel.sel) {
+          updateSelection(sel.sel);
+        } else {
+          editorRef.current!.blur();
+        }
       }
       newDomSelectionRef.current = null;
       const selection = window.getSelection();
@@ -7073,7 +7139,9 @@ function ReactEditor({
         console.error('no dom selection after set manually');
         return;
       }
-      scrollIntoView(selection);
+      if (sel.sel && !sel.doNotScroll) {
+        scrollIntoView(selection);
+      }
     }
   });
 
@@ -7609,7 +7677,7 @@ function ReactEditor({
                 (sel as BlockSelection).start.blockId ===
                   editorCtrl.current.value.blocks[0].id &&
                 ((sel as BlockSelection).start as ParagraphPoint).offset === 0
-              : cmd !== cmds['any delete forward'] &&  cmd !== cmds['space'])
+              : cmd !== cmds['any delete forward'] && cmd !== cmds['space'])
           ) {
             event.preventDefault();
           }
